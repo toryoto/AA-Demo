@@ -10,9 +10,10 @@ import { providers } from 'ethers'
 import { EntryPoint__factory, SimpleAccountFactory__factory } from 'userop/dist/typechain'
 
 const entryPoint = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
-const factory = '0x9406Cc6185a346906296840746125a0E44976454'
-const bundlerUrl = 'https://bundler.service.nerochain.io'
-const rpcUrl = 'https://rpc-testnet.nerochain.io';
+const factory = '0x101DA2ce5A5733BAbc1956a71C5d640c8E6a113d'
+// const bundlerUrl = 'https://bundler.service.nerochain.io'
+const bundlerUrl = `https://api.pimlico.io/v1/sepolia/rpc?apikey=${process.env.NEXT_PUBLIC_PIMLICO_API_KEY}`
+const rpcUrl = `https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`;
 const provider = new BundlerJsonRpcProvider(rpcUrl)
 
 export default function AAWallet() {
@@ -21,6 +22,7 @@ export default function AAWallet() {
   const [aaAddress, setAaAddress] = useState('')
   const [isDeployed, setIsDeployed] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [deploying, setDeploying] = useState(false)
 
   useEffect(() => {
     const initializeAA = async () => {
@@ -28,17 +30,6 @@ export default function AAWallet() {
       
       setLoading(true)
       try {
-        const { account, chain, transport } = walletClient
-        console.log(walletClient)
-        const network = {
-          chainId: chain.id,
-          name: chain.name,
-          ensAddress: chain.contracts?.ensRegistry?.address,
-        }
-        const provider = new providers.Web3Provider(transport, network)
-        const signer = provider.getSigner(account.address)
-        console.log(11)
-
         const factoryInterface = SimpleAccountFactory__factory.connect(
           factory,
           provider,
@@ -56,21 +47,28 @@ export default function AAWallet() {
             0,
           ]),
         ])
-        console.log(initCode)
-        const accountAddress = await entryPointInterface.callStatic.getSenderAddress(initCode);
-        console.log("Account Address:", accountAddress);
-   
-        // const client = await Client.init(rpcUrl, { entryPoint: entryPoint });
-        // const userOpBuilder = new UserOperationBuilder();
-        // userOpBuilder.setSender(accountAddress);
-        // userOpBuilder.setInitCode(initCode);
-        // const res = await client.sendUserOperation(userOpBuilder, {
-        //   onBuild: (op) => console.log("Signed UserOperation:", op),
-        // });
-   
-        // console.log("UserOpHash:", res.userOpHash);
-        // const ev = await res.wait();
-        // console.log("Transaction Hash:", ev?.transactionHash);
+
+        const salt = 0
+        const predictedAddress = await factoryInterface.getAddress(address, salt)
+        console.log("Predicted Account Address:", predictedAddress)
+        setAaAddress(predictedAddress)
+
+        // const code = await provider.getCode(predictedAddress)
+        // setIsDeployed(code !== '0x')
+
+        try {
+          await entryPointInterface.callStatic.getSenderAddress(initCode)
+        } catch (error: any) {
+          if (error?.errorArgs?.[0]) {
+            const accountAddress = error.errorArgs[0]
+            console.log("Account Address:", accountAddress)
+            setAaAddress(accountAddress)
+            
+            // デプロイ状態の確認
+            const code = await provider.getCode(accountAddress)
+            setIsDeployed(code !== '0x')
+          }
+        }
 
       } catch (error) {
         console.error('Error:', error)
@@ -83,16 +81,30 @@ export default function AAWallet() {
   }, [walletClient, address])
 
   return (
-    <div>
+    <div className="p-4">
       <ConnectButton />
-
+  
       {address && (
-        <div className="content">
-          <div className="section">
-            <h2>Account Info</h2>
-            <p>EOA Address: {address}</p>
-            <p>AA Address: {loading ? 'Loading...' : aaAddress}</p>
-            <p>Status: {loading ? 'Checking...' : isDeployed ? 'Deployed' : 'Not Deployed'}</p>
+        <div className="mt-4 space-y-4">
+          <h2 className="text-xl font-bold">Account Info</h2>
+          <div className="space-y-2">
+            <p>
+              <span className="font-semibold">EOA Address:</span> {address}
+            </p>
+            <p>
+              <span className="font-semibold">Smart Account Address:</span>{' '}
+              {loading ? 'Loading...' : aaAddress || 'Not created'}
+            </p>
+            <p>
+              <span className="font-semibold">Status:</span>{' '}
+              {loading ? (
+                'Checking...'
+              ) : isDeployed ? (
+                <span className="text-green-600">Deployed</span>
+              ) : (
+                <span className="text-yellow-600">Not Deployed</span>
+              )}
+            </p>
           </div>
         </div>
       )}
