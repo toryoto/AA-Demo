@@ -1,16 +1,19 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useAccount, useWalletClient } from 'wagmi'
+import { WalletClient } from 'viem'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { ethers } from 'ethers'
+import { BundlerJsonRpcProvider, Presets, Client, UserOperationBuilder } from 'userop'
+import { JsonRpcProvider } from '@ethersproject/providers'
+import { providers } from 'ethers'
+import { EntryPoint__factory, SimpleAccountFactory__factory } from 'userop/dist/typechain'
 
-const ENTRY_POINT_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
-const SIMPLE_ACCOUNT_FACTORY_ADDRESS = '0x9406Cc6185a346906296840746125a0E44976454'
-
-const SIMPLE_ACCOUNT_FACTORY_ABI = [
-  "function getAddress(address owner, uint256 salt) view returns (address)",
-  "function createAccount(address owner, uint256 salt)"
-]
+const entryPoint = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
+const factory = '0x9406Cc6185a346906296840746125a0E44976454'
+const bundlerUrl = 'https://bundler.service.nerochain.io'
+const rpcUrl = 'https://rpc-testnet.nerochain.io';
+const provider = new BundlerJsonRpcProvider(rpcUrl)
 
 export default function AAWallet() {
   const { address } = useAccount()
@@ -25,42 +28,52 @@ export default function AAWallet() {
       
       setLoading(true)
       try {
-        const provider = new ethers.providers.Web3Provider(walletClient.transport)
-        const signer = provider.getSigner()
-        console.log(provider)
-        console.log(signer)
-
-        // bytes32形式のsalt生成
-        const salt = ethers.utils.hexZeroPad(ethers.utils.hexlify(0), 32)
-
-        const factory = new ethers.Contract(
-          SIMPLE_ACCOUNT_FACTORY_ADDRESS,
-          SIMPLE_ACCOUNT_FACTORY_ABI,
-          signer
-        )
-
-        const calculatedAddress = await factory.getAddress(address, salt)
-        setAaAddress(calculatedAddress)
-
-        const code = await provider.getCode(calculatedAddress)
-        const deployed = code !== '0x'
-        setIsDeployed(deployed)
-
-        if (!deployed) {
-          const tx = await factory.createAccount(address, 0, {
-            gasLimit: 500000
-          })
-          
-          const receipt = await tx.wait()
-          console.log('Deployment receipt:', receipt)
-          setIsDeployed(true)
+        const { account, chain, transport } = walletClient
+        console.log(walletClient)
+        const network = {
+          chainId: chain.id,
+          name: chain.name,
+          ensAddress: chain.contracts?.ensRegistry?.address,
         }
+        const provider = new providers.Web3Provider(transport, network)
+        const signer = provider.getSigner(account.address)
+        console.log(11)
+
+        const factoryInterface = SimpleAccountFactory__factory.connect(
+          factory,
+          provider,
+        )
+        const entryPointInterface = EntryPoint__factory.connect(
+          entryPoint,
+          provider,
+        )
+        console.log(factoryInterface)
+
+        const initCode = await ethers.utils.hexConcat([
+          factory,
+          factoryInterface.interface.encodeFunctionData('createAccount', [
+            address,
+            0,
+          ]),
+        ])
+        console.log(initCode)
+        const accountAddress = await entryPointInterface.callStatic.getSenderAddress(initCode);
+        console.log("Account Address:", accountAddress);
+   
+        // const client = await Client.init(rpcUrl, { entryPoint: entryPoint });
+        // const userOpBuilder = new UserOperationBuilder();
+        // userOpBuilder.setSender(accountAddress);
+        // userOpBuilder.setInitCode(initCode);
+        // const res = await client.sendUserOperation(userOpBuilder, {
+        //   onBuild: (op) => console.log("Signed UserOperation:", op),
+        // });
+   
+        // console.log("UserOpHash:", res.userOpHash);
+        // const ev = await res.wait();
+        // console.log("Transaction Hash:", ev?.transactionHash);
+
       } catch (error) {
-        console.error('Detailed error:', {
-          message: error.message,
-          code: error.code,
-          data: error.data
-        })
+        console.error('Error:', error)
       } finally {
         setLoading(false)
       }
