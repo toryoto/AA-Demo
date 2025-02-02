@@ -10,11 +10,11 @@
   },
   "dependencies": {
     "@rainbow-me/rainbowkit": "^2.2.3",
-    "ethers": "^6.13.5",
+    "ethers": "^5.7.2",
     "next": "15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "userop": "^0.4.0-beta.5",
+    "userop": "^0.3.0",
     "viem": "^2.22.17",
     "wagmi": "^2.14.9"
   },
