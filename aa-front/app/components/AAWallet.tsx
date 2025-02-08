@@ -1,20 +1,80 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useAccount, useWalletClient } from 'wagmi'
-import { WalletClient } from 'viem'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { ethers } from 'ethers'
-import { BundlerJsonRpcProvider, Presets, Client, UserOperationBuilder } from 'userop'
-import { JsonRpcProvider } from '@ethersproject/providers'
-import { providers } from 'ethers'
-import { EntryPoint__factory, SimpleAccountFactory__factory } from 'userop/dist/typechain'
+import { 
+  createPublicClient, 
+  http, 
+  concat, 
+  encodeFunctionData, 
+  getContract,
+  Hash,
+  toHex,
+  Hex,
+  createClient
+} from 'viem'
+import { sepolia } from 'viem/chains'
+import { bundlerActions } from 'viem/account-abstraction'
 
-const entryPoint = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
-const factory = '0x101DA2ce5A5733BAbc1956a71C5d640c8E6a113d'
-// const bundlerUrl = 'https://bundler.service.nerochain.io'
-const bundlerUrl = `https://api.pimlico.io/v1/sepolia/rpc?apikey=${process.env.NEXT_PUBLIC_PIMLICO_API_KEY}`
-const rpcUrl = `https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`;
-const provider = new BundlerJsonRpcProvider(rpcUrl)
+const ENTRY_POINT_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
+const FACTORY_ADDRESS = '0x101DA2ce5A5733BAbc1956a71C5d640c8E6a113d'
+
+const FACTORY_ABI = [
+  {
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'salt', type: 'uint256' }
+    ],
+    name: 'createAccount',
+    outputs: [{ name: 'ret', type: 'address' }],
+    type: 'function'
+  },
+  {
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'salt', type: 'uint256' }
+    ],
+    name: 'getAddress',
+    outputs: [{ name: 'ret', type: 'address' }],
+    type: 'function'
+  }
+] as const
+
+export interface UserOperation {
+  sender: Hex;
+  nonce: Hex;
+  initCode: Hex;
+  callData: Hex;
+  callGasLimit: Hex;
+  verificationGasLimit: Hex;
+  preVerificationGas: Hex;
+  maxFeePerGas: Hex;
+  maxPriorityFeePerGas: Hex;
+  paymasterAndData: Hex;
+  signature: Hex;
+  chainId: number;
+}
+
+const ENTRY_POINT_ABI = [
+  {
+    inputs: [{ name: 'userOp', type: 'tuple', components: [
+      { name: 'sender', type: 'address' },
+      { name: 'nonce', type: 'uint256' },
+      { name: 'initCode', type: 'bytes' },
+      { name: 'callData', type: 'bytes' },
+      { name: 'callGasLimit', type: 'uint256' },
+      { name: 'verificationGasLimit', type: 'uint256' },
+      { name: 'preVerificationGas', type: 'uint256' },
+      { name: 'maxFeePerGas', type: 'uint256' },
+      { name: 'maxPriorityFeePerGas', type: 'uint256' },
+      { name: 'paymasterAndData', type: 'bytes' },
+      { name: 'signature', type: 'bytes' }
+    ]}],
+    name: 'getUserOpHash',
+    outputs: [{ name: '', type: 'bytes32' }],
+    type: 'function'
+  }
+] as const
 
 export default function AAWallet() {
   const { address } = useAccount()
@@ -24,51 +84,39 @@ export default function AAWallet() {
   const [loading, setLoading] = useState(false)
   const [deploying, setDeploying] = useState(false)
 
+  // Public Clientの作成
+  const publicClient = createPublicClient({
+    chain: sepolia,
+    transport: http(`https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`)
+  })
+
+  // Bundler Clientの作成
+  const bundlerClient = createClient({ 
+    chain: sepolia,
+    transport: http(`https://api.pimlico.io/v1/sepolia/rpc?apikey=${process.env.NEXT_PUBLIC_PIMLICO_API_KEY}`)
+  }).extend(bundlerActions)
+
   useEffect(() => {
     const initializeAA = async () => {
       if (!walletClient || !address) return
       
       setLoading(true)
       try {
-        const factoryInterface = SimpleAccountFactory__factory.connect(
-          factory,
-          provider,
-        )
-        const entryPointInterface = EntryPoint__factory.connect(
-          entryPoint,
-          provider,
-        )
-        console.log(factoryInterface)
+        const factory = getContract({
+          address: FACTORY_ADDRESS,
+          abi: FACTORY_ABI,
+          client: publicClient
+        })
 
-        const initCode = await ethers.utils.hexConcat([
-          factory,
-          factoryInterface.interface.encodeFunctionData('createAccount', [
-            address,
-            0,
-          ]),
-        ])
-
+        // アカウントアドレスの予測
         const salt = 0
-        const predictedAddress = await factoryInterface.getAddress(address, salt)
-        console.log("Predicted Account Address:", predictedAddress)
+        const predictedAddress = await factory.read.getAddress([address, BigInt(salt)]) as Hex
+
         setAaAddress(predictedAddress)
-
-        // const code = await provider.getCode(predictedAddress)
-        // setIsDeployed(code !== '0x')
-
-        try {
-          await entryPointInterface.callStatic.getSenderAddress(initCode)
-        } catch (error: any) {
-          if (error?.errorArgs?.[0]) {
-            const accountAddress = error.errorArgs[0]
-            console.log("Account Address:", accountAddress)
-            setAaAddress(accountAddress)
-            
-            // デプロイ状態の確認
-            const code = await provider.getCode(accountAddress)
-            setIsDeployed(code !== '0x')
-          }
-        }
+        
+        // デプロイ状態の確認
+        const code = await publicClient.getCode({ address: predictedAddress })
+        setIsDeployed(Boolean(code?.length))
 
       } catch (error) {
         console.error('Error:', error)
@@ -78,8 +126,83 @@ export default function AAWallet() {
     }
 
     initializeAA()
-  }, [walletClient, address])
+  }, [walletClient, address, publicClient])
 
+  const deployAccount = async () => {
+    console.log(111)
+    if (!address || !walletClient || !aaAddress) return
+    console.log(222)
+    
+    setDeploying(true)
+    try {
+      // initCodeの作成
+      const initCode = concat([
+        FACTORY_ADDRESS,
+        encodeFunctionData({
+          abi: FACTORY_ABI,
+          functionName: 'createAccount',
+          args: [address, 0]
+        })
+      ])
+
+      // ガス料金の取得
+      const [priorityFee] = await Promise.all([
+        publicClient.getBlock({ blockTag: 'latest' }).then(block => block.baseFeePerGas!),
+        publicClient.estimateFeesPerGas().then(fees => fees.maxPriorityFeePerGas)
+      ])
+      
+      // UserOperationの作成
+      const userOperation: UserOperation = {
+        sender: toHex(aaAddress),
+        nonce: toHex(0),
+        chainId: sepolia.id,
+        initCode,
+        callData: '0x',
+        callGasLimit: toHex(3_000_000),
+        verificationGasLimit: toHex(3_000_000),
+        preVerificationGas: toHex(3_000_000),
+        maxFeePerGas: toHex(3_000_000),
+        maxPriorityFeePerGas: toHex(priorityFee),
+        paymasterAndData: '0x',
+        signature: '0x'
+      }
+
+      // UserOperationハッシュの計算と署名
+      const entryPoint = getContract({
+        address: ENTRY_POINT_ADDRESS,
+        abi: ENTRY_POINT_ABI,
+        client: publicClient
+      })
+
+      const userOpHashForSign = await entryPoint.read.getUserOpHash([userOperation])
+
+      const signature = await walletClient.signMessage({
+        message: { raw: userOpHashForSign as Hash }
+      })
+      
+      userOperation.signature = signature
+
+      // UserOperationの送信
+      const userOpHash = await bundlerClient.request({
+        method: 'eth_sendUserOperation',
+        params: [userOperation, ENTRY_POINT_ADDRESS]
+      })
+
+      console.log('UserOperation Hash:', userOpHash)
+
+      // 受領の待機
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: userOpHash });
+
+      console.log('Transaction hash:', receipt.transactionHash)
+      setIsDeployed(true)
+
+    } catch (error) {
+      console.error('Deploy error:', error)
+    } finally {
+      setDeploying(false)
+    }
+  }
+  
   return (
     <div className="p-4">
       <ConnectButton />
@@ -105,6 +228,15 @@ export default function AAWallet() {
                 <span className="text-yellow-600">Not Deployed</span>
               )}
             </p>
+            {!isDeployed && !loading && (
+              <button
+                onClick={deployAccount}
+                disabled={deploying}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-blue-300"
+              >
+                {deploying ? 'Deploying...' : 'Deploy via Bundler'}
+              </button>
+            )}
           </div>
         </div>
       )}
