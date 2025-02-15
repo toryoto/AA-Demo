@@ -8,18 +8,16 @@ import {
   concat, 
   encodeFunctionData, 
   getContract,
-  Hash,
   toHex,
   Hex,
   createClient,
-  keccak256,
-  encodeAbiParameters
+  padHex,
 } from 'viem'
 import { sepolia } from 'viem/chains'
 import { bundlerActions } from 'viem/account-abstraction'
 import { accountFactoryAbi } from '../abi/accountFactory'
 import { entryPointAbi } from '../abi/entryPoint'
-//import { verifyingPaymasterAbi } from '../abi/verifyingPaymaster'
+import { verifyingPaymasterAbi } from '../abi/verifyingPaymaster'
 import { UserOperation } from '../lib/userOperationType'
 
 const ENTRY_POINT_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
@@ -82,38 +80,17 @@ export default function AAWallet() {
 
   const getPaymasterAndData = async (userOp: UserOperation): Promise<Hex> => {
     try {
-      // PaymasterのvalidUntilとvalidAfterを設定
-      const validUntil = Math.floor(Date.now() / 1000) + 3600 // 1時間有効
-      const validAfter = Math.floor(Date.now() / 1000) - 60 // 1分前から有効
-
-      // PaymasterAndDataの構築
-      const paymasterAndData = concat([
-        PAYMASTER_ADDRESS,
-        encodeAbiParameters(
-          [{ type: 'uint48' }, { type: 'uint48' }],
-          [Number(validUntil), Number(validAfter)]
-        )
-      ])
-
-      // ハッシュの計算
-      const hash = keccak256(
-        concat([
-          userOp.sender,
-          userOp.nonce,
-          keccak256(userOp.initCode),
-          keccak256(userOp.callData),
-          toHex(userOp.callGasLimit),
-          toHex(userOp.verificationGasLimit),
-          toHex(userOp.preVerificationGas),
-          toHex(userOp.maxFeePerGas),
-          toHex(userOp.maxPriorityFeePerGas),
-          paymasterAndData
-        ])
-      )
-
-      console.log("hash: ", hash)
-
-      // PaymasterのSignerから署名を取得する
+      const validUntil = BigInt(Math.floor(Date.now() / 1000) + 3600)
+      const validAfter = BigInt(Math.floor(Date.now() / 1000) - 60)
+  
+      const verifyingPaymaster = getContract({
+        address: PAYMASTER_ADDRESS,
+        abi: verifyingPaymasterAbi,
+        client: publicClient
+      })
+  
+      const hash = await verifyingPaymaster.read.getHash([userOp, validUntil, validAfter])
+  
       const response = await fetch('/api/paymaster/sign', {
         method: 'POST',
         headers: {
@@ -121,19 +98,26 @@ export default function AAWallet() {
         },
         body: JSON.stringify({
           hash,
-          validUntil,
-          validAfter
+          validUntil: validUntil.toString(),
+          validAfter: validAfter.toString()
         }),
       })
-
+  
       if (!response.ok) {
         throw new Error('Failed to get paymaster signature')
       }
-
+  
       const { signature } = await response.json()
-
-      // PaymasterAndDataの完成形を返す
-      return toHex(concat([paymasterAndData, signature]))
+  
+      // Paymasterのアドレスを含めた形式で構築
+      const paymasterAndData = concat([
+        PAYMASTER_ADDRESS, // 20バイトのアドレス
+        padHex(toHex(validUntil), { size: 6 }),
+        padHex(toHex(validAfter), { size: 6 }),
+        signature
+      ]) as Hex
+  
+      return paymasterAndData
     } catch (error) {
       console.error('Error getting paymaster signature:', error)
       throw error
@@ -186,7 +170,6 @@ export default function AAWallet() {
       }
 
       userOperation.paymasterAndData = await getPaymasterAndData(userOperation)
-      console.log("paymasterAndData: ", userOperation.paymasterAndData)
 
       // UserOperationハッシュの計算と署名
       const entryPoint = getContract({
@@ -198,13 +181,16 @@ export default function AAWallet() {
       console.log(userOperation.sender)
 
       const userOpHashForSign = await entryPoint.read.getUserOpHash([userOperation])
+      console.log("userOpHashForSign:",userOpHashForSign)
 
       const signature = await walletClient.signMessage({
-        message: { raw: userOpHashForSign as Hash }
+        message: { raw: userOpHashForSign as `0x${string}` }
       })
       
       userOperation.signature = signature
       console.log("signature: ", signature)
+
+      console.log(userOperation.paymasterAndData)
 
       // UserOperationの送信
       const userOpHash = await bundlerClient.request({

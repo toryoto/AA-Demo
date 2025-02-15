@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { privateKeyToAccount } from 'viem/accounts'
-import { concat, encodeAbiParameters, Hex, toBytes } from 'viem'
 
 const PAYMASTER_PRIVATE_KEY = process.env.PAYMASTER_PRIVATE_KEY
 if (!PAYMASTER_PRIVATE_KEY) {
   throw new Error('PAYMASTER_PRIVATE_KEY is not set')
 }
 
-// Paymasterの署名を行う権限を持つEOAアカウントを作成
-const paymasterAccount = privateKeyToAccount(PAYMASTER_PRIVATE_KEY as Hex)
+const paymasterAccount = privateKeyToAccount(PAYMASTER_PRIVATE_KEY as `0x${string}`)
 
-// 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -38,21 +35,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 署名するデータを生成（hash, validateUntil, validateAfterを使用）
-    // Paymasterコントラクトの_validatePaymasterUserOpでuserOp.paymasterAndDataから取得してる
-    const message = concat([
-      toBytes(hash),
-      encodeAbiParameters(
-        [{ type: 'uint48' }, { type: 'uint48' }],
-        [Number(validUntil), Number(validAfter)]
-      )
-    ])
-
+    // ハッシュをそのまま署名するのではなく、Ethereum Signed Messageとして署名する
     const signature = await paymasterAccount.signMessage({
-      message: { raw: message }
+      message: { raw: hash as `0x${string}` }
     })
 
-    console.log("signature: ", signature)
+    console.log("Signer address:", paymasterAccount.address);
+    console.log("Original hash:", hash);
+    console.log("Generated signature:", signature);
 
     return NextResponse.json({ signature })
   } catch (error) {
