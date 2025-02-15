@@ -15,30 +15,12 @@ import {
 } from 'viem'
 import { sepolia } from 'viem/chains'
 import { bundlerActions } from 'viem/account-abstraction'
+import { accountFactoryAbi } from '../abi/accountFactory'
+import { entryPointAbi } from '../abi/entryPoint'
+import { verifyingPaymasterAbi } from '../abi/verifyingPaymaster'
 
 const ENTRY_POINT_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
 const FACTORY_ADDRESS = '0x101DA2ce5A5733BAbc1956a71C5d640c8E6a113d'
-
-const FACTORY_ABI = [
-  {
-    inputs: [
-      { name: 'owner', type: 'address' },
-      { name: 'salt', type: 'uint256' }
-    ],
-    name: 'createAccount',
-    outputs: [{ name: 'ret', type: 'address' }],
-    type: 'function'
-  },
-  {
-    inputs: [
-      { name: 'owner', type: 'address' },
-      { name: 'salt', type: 'uint256' }
-    ],
-    name: 'getAddress',
-    outputs: [{ name: 'ret', type: 'address' }],
-    type: 'function'
-  }
-] as const
 
 export interface UserOperation {
   sender: Hex;
@@ -55,26 +37,6 @@ export interface UserOperation {
   chainId: number;
 }
 
-const ENTRY_POINT_ABI = [
-  {
-    inputs: [{ name: 'userOp', type: 'tuple', components: [
-      { name: 'sender', type: 'address' },
-      { name: 'nonce', type: 'uint256' },
-      { name: 'initCode', type: 'bytes' },
-      { name: 'callData', type: 'bytes' },
-      { name: 'callGasLimit', type: 'uint256' },
-      { name: 'verificationGasLimit', type: 'uint256' },
-      { name: 'preVerificationGas', type: 'uint256' },
-      { name: 'maxFeePerGas', type: 'uint256' },
-      { name: 'maxPriorityFeePerGas', type: 'uint256' },
-      { name: 'paymasterAndData', type: 'bytes' },
-      { name: 'signature', type: 'bytes' }
-    ]}],
-    name: 'getUserOpHash',
-    outputs: [{ name: '', type: 'bytes32' }],
-    type: 'function'
-  }
-] as const
 
 export default function AAWallet() {
   const { address } = useAccount()
@@ -104,7 +66,7 @@ export default function AAWallet() {
       try {
         const factory = getContract({
           address: FACTORY_ADDRESS,
-          abi: FACTORY_ABI,
+          abi: accountFactoryAbi,
           client: publicClient
         })
 
@@ -139,7 +101,7 @@ export default function AAWallet() {
       const initCode = concat([
         FACTORY_ADDRESS,
         encodeFunctionData({
-          abi: FACTORY_ABI,
+          abi: accountFactoryAbi,
           functionName: 'createAccount',
           args: [address, 0]
         })
@@ -170,7 +132,7 @@ export default function AAWallet() {
       // UserOperationハッシュの計算と署名
       const entryPoint = getContract({
         address: ENTRY_POINT_ADDRESS,
-        abi: ENTRY_POINT_ABI,
+        abi: entryPointAbi,
         client: publicClient
       })
 
