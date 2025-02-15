@@ -6,15 +6,8 @@ pragma solidity ^0.8.12;
 
 import "../core/BasePaymaster.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-/**
- * A sample paymaster that uses external service to decide whether to pay for the UserOp.
- * The paymaster trusts an external signer to sign the transaction.
- * The calling user must pass the UserOp to that external signer first, which performs
- * whatever off-chain verification before signing the UserOp.
- * Note that this signature is NOT a replacement for the account-specific signature:
- * - the paymaster checks a signature to agree to PAY for GAS.
- * - the account checks a signature to prove identity and account ownership.
- */
+
+// UserOpの署名を検証してガス代をサポートするコントラクト
 contract VerifyingPaymaster is BasePaymaster {
 
     using ECDSA for bytes32;
@@ -26,12 +19,15 @@ contract VerifyingPaymaster is BasePaymaster {
 
     uint256 private constant SIGNATURE_OFFSET = 84;
 
+    // 初期化時にEntryPointとsignerを保存する
+    // Paymasterにガス代をサポートさせる場合はUserOpに含まれる署名の署名者をsignerにする必要がる
     constructor(IEntryPoint _entryPoint, address _verifyingSigner) BasePaymaster(_entryPoint) {
         verifyingSigner = _verifyingSigner;
     }
 
     mapping(address => uint256) public senderNonce;
 
+    // UserOpのデータをエンコードする
     function pack(UserOperation calldata userOp) internal pure returns (bytes memory ret) {
         // lighter signature scheme. must match UserOp.ts#packUserOp
         bytes calldata pnd = userOp.paymasterAndData;
@@ -55,6 +51,7 @@ contract VerifyingPaymaster is BasePaymaster {
      * note that this signature covers all fields of the UserOperation, except the "paymasterAndData",
      * which will carry the signature itself.
      */
+    // オフチェーンのサービスがUserOpに署名するためのハッシュを生成する
     function getHash(UserOperation calldata userOp, uint48 validUntil, uint48 validAfter)
     public view returns (bytes32) {
         //can't use userOp.hash(), since it contains also the paymasterAndData itself.
@@ -70,12 +67,13 @@ contract VerifyingPaymaster is BasePaymaster {
     }
 
     /**
-     * verify our external signer signed this request.
-     * the "paymasterAndData" is expected to be the paymaster and a signature over the entire request params
      * paymasterAndData[:20] : address(this)
      * paymasterAndData[20:84] : abi.encode(validUntil, validAfter)
      * paymasterAndData[84:] : signature
      */
+    // UserOpの署名を検証して、有効であるかを検証するメソッド
+    // オフチェーンの署名をオンチェーンで確認する
+    // 署名が無効でもリバートせず、エラーコードを返すことでTxの失敗を防ぐ
     function _validatePaymasterUserOp(UserOperation calldata userOp, bytes32 /*userOpHash*/, uint256 requiredPreFund)
     internal override returns (bytes memory context, uint256 validationData) {
         (requiredPreFund);

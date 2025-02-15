@@ -23,6 +23,8 @@ abstract contract BasePaymaster is IPaymaster, Ownable {
     }
 
     /// @inheritdoc IPaymaster
+    // Paymasterコントラクトがユーザの処理に対してガス代を支払うことに同意するかを検証するメソッド
+    // 実行者は必ずEntryPoint
     function validatePaymasterUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 maxCost)
     external override returns (bytes memory context, uint256 validationData) {
          _requireFromEntryPoint();
@@ -57,9 +59,9 @@ abstract contract BasePaymaster is IPaymaster, Ownable {
         revert("must override");
     }
 
-    /**
-     * add a deposit for this paymaster, used for paying for transaction fees
-     */
+    // Paymasterコントラクトに対してガス代を払うためのデポジットを追加するメソッド
+    // EntryPointのdepositToメソッドを実行してEntryPointで資産を管理
+    // Paymasterのアドレスごとの資産がEntryPointで管理される
     function deposit() public payable {
         entryPoint.depositTo{value : msg.value}(address(this));
     }
