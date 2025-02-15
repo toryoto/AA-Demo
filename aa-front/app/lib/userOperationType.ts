@@ -12,5 +12,4 @@ export interface UserOperation {
   maxPriorityFeePerGas: Hex;
   paymasterAndData: Hex;
   signature: Hex;
-  chainId: number;
 }

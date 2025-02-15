@@ -11,13 +11,15 @@ import {
   Hash,
   toHex,
   Hex,
-  createClient
+  createClient,
+  keccak256,
+  encodeAbiParameters
 } from 'viem'
 import { sepolia } from 'viem/chains'
 import { bundlerActions } from 'viem/account-abstraction'
 import { accountFactoryAbi } from '../abi/accountFactory'
 import { entryPointAbi } from '../abi/entryPoint'
-import { verifyingPaymasterAbi } from '../abi/verifyingPaymaster'
+//import { verifyingPaymasterAbi } from '../abi/verifyingPaymaster'
 import { UserOperation } from '../lib/userOperationType'
 
 const ENTRY_POINT_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
@@ -75,7 +77,68 @@ export default function AAWallet() {
     }
 
     initializeAA()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletClient, address])
+
+  const getPaymasterAndData = async (userOp: UserOperation): Promise<Hex> => {
+    try {
+      // PaymasterのvalidUntilとvalidAfterを設定
+      const validUntil = Math.floor(Date.now() / 1000) + 3600 // 1時間有効
+      const validAfter = Math.floor(Date.now() / 1000) - 60 // 1分前から有効
+
+      // PaymasterAndDataの構築
+      const paymasterAndData = concat([
+        PAYMASTER_ADDRESS,
+        encodeAbiParameters(
+          [{ type: 'uint48' }, { type: 'uint48' }],
+          [Number(validUntil), Number(validAfter)]
+        )
+      ])
+
+      // ハッシュの計算
+      const hash = keccak256(
+        concat([
+          userOp.sender,
+          userOp.nonce,
+          keccak256(userOp.initCode),
+          keccak256(userOp.callData),
+          toHex(userOp.callGasLimit),
+          toHex(userOp.verificationGasLimit),
+          toHex(userOp.preVerificationGas),
+          toHex(userOp.maxFeePerGas),
+          toHex(userOp.maxPriorityFeePerGas),
+          paymasterAndData
+        ])
+      )
+
+      console.log("hash: ", hash)
+
+      // PaymasterのSignerから署名を取得する
+      const response = await fetch('/api/paymaster/sign', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          hash,
+          validUntil,
+          validAfter
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to get paymaster signature')
+      }
+
+      const { signature } = await response.json()
+
+      // PaymasterAndDataの完成形を返す
+      return toHex(concat([paymasterAndData, signature]))
+    } catch (error) {
+      console.error('Error getting paymaster signature:', error)
+      throw error
+    }
+  }
 
   const deployAccount = async () => {
     if (!address || !walletClient || !aaAddress) return
@@ -91,17 +154,26 @@ export default function AAWallet() {
         })
       ])
 
+      console.log("initCode: ", initCode)
+
       // ガス料金の取得
       const [priorityFee] = await Promise.all([
         publicClient.getBlock({ blockTag: 'latest' }).then(block => block.baseFeePerGas!),
         publicClient.estimateFeesPerGas().then(fees => fees.maxPriorityFeePerGas)
       ])
+
+      const nonce = await publicClient.readContract({
+        address: ENTRY_POINT_ADDRESS,
+        abi: entryPointAbi,
+        functionName: 'getNonce',
+        args: [aaAddress, BigInt(0)],
+      }) as bigint;
+      console.log('nonce: ', nonce);
       
       // UserOperationの作成
       const userOperation: UserOperation = {
-        sender: toHex(aaAddress),
-        nonce: toHex(0),
-        chainId: sepolia.id,
+        sender: aaAddress as `0x${string}`,
+        nonce: toHex(nonce),
         initCode,
         callData: '0x',
         callGasLimit: toHex(3_000_000),
@@ -113,12 +185,17 @@ export default function AAWallet() {
         signature: '0x'
       }
 
+      userOperation.paymasterAndData = await getPaymasterAndData(userOperation)
+      console.log("paymasterAndData: ", userOperation.paymasterAndData)
+
       // UserOperationハッシュの計算と署名
       const entryPoint = getContract({
         address: ENTRY_POINT_ADDRESS,
         abi: entryPointAbi,
         client: publicClient
       })
+
+      console.log(userOperation.sender)
 
       const userOpHashForSign = await entryPoint.read.getUserOpHash([userOperation])
 
@@ -127,6 +204,7 @@ export default function AAWallet() {
       })
       
       userOperation.signature = signature
+      console.log("signature: ", signature)
 
       // UserOperationの送信
       const userOpHash = await bundlerClient.request({
