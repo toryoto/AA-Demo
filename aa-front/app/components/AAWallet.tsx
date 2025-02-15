@@ -18,24 +18,11 @@ import { bundlerActions } from 'viem/account-abstraction'
 import { accountFactoryAbi } from '../abi/accountFactory'
 import { entryPointAbi } from '../abi/entryPoint'
 import { verifyingPaymasterAbi } from '../abi/verifyingPaymaster'
+import { UserOperation } from '../lib/userOperationType'
 
 const ENTRY_POINT_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
 const FACTORY_ADDRESS = '0x101DA2ce5A5733BAbc1956a71C5d640c8E6a113d'
-
-export interface UserOperation {
-  sender: Hex;
-  nonce: Hex;
-  initCode: Hex;
-  callData: Hex;
-  callGasLimit: Hex;
-  verificationGasLimit: Hex;
-  preVerificationGas: Hex;
-  maxFeePerGas: Hex;
-  maxPriorityFeePerGas: Hex;
-  paymasterAndData: Hex;
-  signature: Hex;
-  chainId: number;
-}
+const PAYMASTER_ADDRESS = '0xCDAA8197b37C2Ef2F47249612347bDa698dA991b'
 
 
 export default function AAWallet() {
@@ -88,16 +75,13 @@ export default function AAWallet() {
     }
 
     initializeAA()
-  }, [walletClient, address, publicClient])
+  }, [walletClient, address])
 
   const deployAccount = async () => {
-    console.log(111)
     if (!address || !walletClient || !aaAddress) return
-    console.log(222)
     
     setDeploying(true)
     try {
-      // initCodeの作成
       const initCode = concat([
         FACTORY_ADDRESS,
         encodeFunctionData({
@@ -152,7 +136,6 @@ export default function AAWallet() {
 
       console.log('UserOperation Hash:', userOpHash)
 
-      // 受領の待機
       const receipt = await publicClient.waitForTransactionReceipt({ hash: userOpHash });
 
       console.log('Transaction hash:', receipt.transactionHash)
