@@ -143,16 +143,6 @@ export const verifyingPaymasterAbi = [
         "internalType": "struct UserOperation",
         "name": "userOp",
         "type": "tuple"
-      },
-      {
-        "internalType": "uint48",
-        "name": "validUntil",
-        "type": "uint48"
-      },
-      {
-        "internalType": "uint48",
-        "name": "validAfter",
-        "type": "uint48"
       }
     ],
     "name": "getHash",
@@ -177,35 +167,6 @@ export const verifyingPaymasterAbi = [
       }
     ],
     "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes",
-        "name": "paymasterAndData",
-        "type": "bytes"
-      }
-    ],
-    "name": "parsePaymasterAndData",
-    "outputs": [
-      {
-        "internalType": "uint48",
-        "name": "validUntil",
-        "type": "uint48"
-      },
-      {
-        "internalType": "uint48",
-        "name": "validAfter",
-        "type": "uint48"
-      },
-      {
-        "internalType": "bytes",
-        "name": "signature",
-        "type": "bytes"
-      }
-    ],
-    "stateMutability": "pure",
     "type": "function"
   },
   {
@@ -236,25 +197,6 @@ export const verifyingPaymasterAbi = [
     "name": "renounceOwnership",
     "outputs": [],
     "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "name": "senderNonce",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
     "type": "function"
   },
   {
