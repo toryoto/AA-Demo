@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { privateKeyToAccount } from 'viem/accounts'
+import { privateKeyToAccount, signMessage } from 'viem/accounts'
+
 
 const PAYMASTER_PRIVATE_KEY = process.env.PAYMASTER_PRIVATE_KEY
 if (!PAYMASTER_PRIVATE_KEY) {
@@ -12,7 +13,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { hash, validUntil, validAfter } = body
-    console.log("body: ", hash, validUntil, validAfter)
 
     if (!hash || !validUntil || !validAfter) {
       return NextResponse.json(
@@ -35,14 +35,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ハッシュをそのまま署名するのではなく、Ethereum Signed Messageとして署名する
-    const signature = await paymasterAccount.signMessage({
-      message: { raw: hash as `0x${string}` }
-    })
 
-    console.log("Signer address:", paymasterAccount.address);
-    console.log("Original hash:", hash);
-    console.log("Generated signature:", signature);
+    const signature = await signMessage({
+      message: { raw: hash },
+      privateKey: PAYMASTER_PRIVATE_KEY as `0x${string}`
+    });
+
+    console.log({
+      signer: paymasterAccount.address,
+      hash,
+      signature,
+      signatureLength: signature.length
+    })
 
     return NextResponse.json({ signature })
   } catch (error) {

@@ -117,9 +117,14 @@ export default function AAWallet() {
         signature
       ])
 
-      console.log('Hash to be signed:', hash)
+      console.log({
+        paymasterAddress: paymasterAndData.slice(0, 42),
+        validUntil: paymasterAndData.slice(42, 106),
+        validAfter: paymasterAndData.slice(106, 170),
+        signature: paymasterAndData.slice(170)
+      })
 
-      return paymasterAndData
+      return paymasterAndData as `0x${string}`
     } catch (error) {
       console.error('Error getting paymaster signature:', error)
       throw error
@@ -140,7 +145,7 @@ export default function AAWallet() {
         })
       ])
 
-      console.log("initCode: ", initCode)
+      // console.log("initCode: ", initCode)
 
       // ガス料金の取得
       const [priorityFee] = await Promise.all([
@@ -154,7 +159,7 @@ export default function AAWallet() {
         functionName: 'getNonce',
         args: [aaAddress, BigInt(0)],
       }) as bigint;
-      console.log('nonce: ', nonce);
+      // console.log('nonce: ', nonce);
       
       // UserOperationの作成
       const userOperation: UserOperation = {
@@ -182,7 +187,7 @@ export default function AAWallet() {
 
 
       const userOpHashForSign = await entryPoint.read.getUserOpHash([userOperation])
-      console.log("userOpHashForSign:",userOpHashForSign)
+      // console.log("userOpHashForSign:",userOpHashForSign)
 
       const signature = await walletClient.signMessage({
         message: { raw: userOpHashForSign as `0x${string}` }
