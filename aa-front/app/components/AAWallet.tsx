@@ -18,11 +18,10 @@ import { accountFactoryAbi } from '../abi/accountFactory'
 import { entryPointAbi } from '../abi/entryPoint'
 import { verifyingPaymasterAbi } from '../abi/verifyingPaymaster'
 import { UserOperation } from '../lib/userOperationType'
-import { privateKeyToAccount } from 'viem/accounts'
 
 const ENTRY_POINT_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
 const FACTORY_ADDRESS = '0x101DA2ce5A5733BAbc1956a71C5d640c8E6a113d'
-const PAYMASTER_ADDRESS = '0xf8B81A5197c1A50760DdebA82939c9091B1cAd48'
+const PAYMASTER_ADDRESS = '0x415b4ceC5cf512CeDBE09C12081A0b75E13854Ff'
 
 
 export default function AAWallet() {
@@ -42,7 +41,7 @@ export default function AAWallet() {
   // Bundler Clientの作成
   const bundlerClient = createClient({ 
     chain: sepolia,
-    transport: http(`https://api.pimlico.io/v2/sepolia/rpc?apikey=${process.env.NEXT_PUBLIC_PIMLICO_API_KEY}`)
+    transport: http(`https://api.pimlico.io/v1/sepolia/rpc?apikey=${process.env.NEXT_PUBLIC_PIMLICO_API_KEY}`)
   }).extend(bundlerActions)
 
   useEffect(() => {
@@ -95,28 +94,25 @@ export default function AAWallet() {
         abi: verifyingPaymasterAbi,
         client: publicClient
       })
-  
+
+      // packメソッドがアセンブリの時はダミーデータが必要
+      // userOp.paymasterAndData = ('0x' + '00'.repeat(65 + 20)) as `0x${string}`  
       const userOpHash = await verifyingPaymaster.read.getHash([userOp])
       console.log("Hash from contract:", userOpHash);
-  
-      // const response = await fetch('/api/paymaster/sign', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //   },
-      //   // body: JSON.stringify({ hash }), // ハッシュ検証をサーバー側で行う場合は、userOpも送る
-      //   body: JSON.stringify({ hash, userOp }),
-      // })
-  
-      // const { signature } = await response.json()
-      // console.log("Signature from API:", signature);
 
-      const paymasterAccount = privateKeyToAccount(process.env.NEXT_PUBLIC_PAYMASTER_PRIVATE_KEY as `0x${string}`)
-      const signature = await paymasterAccount.signMessage({
-        message: {
-          raw: userOpHash as `0x${string}`,
+      const response = await fetch('/api/paymaster/sign', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ hash: userOpHash }),
       });
+  
+      if (!response.ok) {
+        throw new Error('Failed to fetch signature from API');
+      }
+  
+      const { signature } = await response.json();
       console.log("Generated signature:", signature);
   
       const paymasterAndData = encodePaymasterAndData({
@@ -147,12 +143,6 @@ export default function AAWallet() {
           args: [address, 0]
         })
       ])
-
-      // const [priorityFee] = await Promise.all([
-      //   publicClient.getBlock({ blockTag: 'latest' }).then(block => block.baseFeePerGas!),
-      //   publicClient.estimateFeesPerGas().then(fees => fees.maxPriorityFeePerGas)
-      // ])
-
       const nonce = await publicClient.readContract({
         address: ENTRY_POINT_ADDRESS,
         abi: entryPointAbi,

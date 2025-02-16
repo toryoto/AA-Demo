@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { privateKeyToAccount } from 'viem/accounts'
-import { Hex } from 'viem';
 
 const PAYMASTER_PRIVATE_KEY = process.env.PAYMASTER_PRIVATE_KEY
 if (!PAYMASTER_PRIVATE_KEY) {
@@ -20,8 +19,10 @@ export async function POST(request: NextRequest) {
 
 
     const signature = await paymasterAccount.signMessage({
-      message: { raw: hash as Hex },
-    })
+      message: {
+        raw: hash as `0x${string}`,
+      },
+    });
 
     return NextResponse.json({ signature })
   } catch (error) {

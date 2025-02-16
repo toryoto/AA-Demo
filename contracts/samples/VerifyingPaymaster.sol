@@ -15,17 +15,42 @@ contract VerifyingPaymaster is BasePaymaster {
     }
 
     // UserOpのデータをエンコードする
-    function pack(UserOperation calldata userOp) internal pure returns (bytes memory ret) {
-        bytes calldata pnd = userOp.paymasterAndData;
-        assembly {
-            let ofs := userOp
-            let len := sub(sub(pnd.offset, ofs), 32)
-            ret := mload(0x40)
-            mstore(0x40, add(ret, add(len, 32)))
-            mstore(ret, len)
-            calldatacopy(add(ret, 32), ofs, len)
-        }
-    }
+    function pack(
+    UserOperation calldata userOp
+  ) internal pure returns (bytes memory ret) {
+    address sender = userOp.getSender();
+    uint256 nonce = userOp.nonce;
+    uint256 callGasLimit = userOp.callGasLimit;
+    uint256 verificationGasLimit = userOp.verificationGasLimit;
+    uint256 preVerificationGas = userOp.preVerificationGas;
+    uint256 maxFeePerGas = userOp.maxFeePerGas;
+    uint256 maxPriorityFeePerGas = userOp.maxPriorityFeePerGas;
+
+    return
+      abi.encode(
+        sender,
+        nonce,
+        userOp.initCode,
+        userOp.callData,
+        callGasLimit,
+        verificationGasLimit,
+        preVerificationGas,
+        maxFeePerGas,
+        maxPriorityFeePerGas
+      );
+  }
+
+//   function pack(UserOperation calldata userOp) internal pure returns (bytes memory ret) {
+//         bytes calldata pnd = userOp.paymasterAndData;
+//         assembly {
+//             let ofs := userOp
+//             let len := sub(sub(pnd.offset, ofs), 32)
+//             ret := mload(0x40)
+//             mstore(0x40, add(ret, add(len, 32)))
+//             mstore(ret, len)
+//             calldatacopy(add(ret, 32), ofs, len)
+//         }
+//     }
 
     // オフチェーンの署名用のハッシュを生成
     function getHash(UserOperation calldata userOp)
