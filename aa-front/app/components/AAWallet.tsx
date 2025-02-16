@@ -78,7 +78,7 @@ export default function AAWallet() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletClient, address])
 
-  const getPaymasterAndData = async (userOp: UserOperation): Promise<Hex> => {
+  const getPaymasterAndData = async (userOp: UserOperation) => {
     try {
       const validUntil = BigInt(Math.floor(Date.now() / 1000) + 3600)
       const validAfter = BigInt(Math.floor(Date.now() / 1000) - 60)
@@ -111,12 +111,14 @@ export default function AAWallet() {
   
       // Paymasterのアドレスを含めた形式で構築
       const paymasterAndData = concat([
-        PAYMASTER_ADDRESS, // 20バイトのアドレス
-        padHex(toHex(validUntil), { size: 6 }),
-        padHex(toHex(validAfter), { size: 6 }),
+        PAYMASTER_ADDRESS,
+        padHex(toHex(validUntil), { size: 32 }),
+        padHex(toHex(validAfter), { size: 32 }),
         signature
-      ]) as Hex
-  
+      ])
+
+      console.log('Hash to be signed:', hash)
+
       return paymasterAndData
     } catch (error) {
       console.error('Error getting paymaster signature:', error)
@@ -178,7 +180,6 @@ export default function AAWallet() {
         client: publicClient
       })
 
-      console.log(userOperation.sender)
 
       const userOpHashForSign = await entryPoint.read.getUserOpHash([userOperation])
       console.log("userOpHashForSign:",userOpHashForSign)
@@ -188,9 +189,6 @@ export default function AAWallet() {
       })
       
       userOperation.signature = signature
-      console.log("signature: ", signature)
-
-      console.log(userOperation.paymasterAndData)
 
       // UserOperationの送信
       const userOpHash = await bundlerClient.request({
