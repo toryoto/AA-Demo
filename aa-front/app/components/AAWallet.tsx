@@ -16,6 +16,7 @@ import { UserOperation } from '../lib/userOperationType'
 import { RefreshCcw } from 'lucide-react'
 import { ENTRY_POINT_ADDRESS, FACTORY_ADDRESS } from '../constants/addresses'
 import { publicClient, bundlerClient } from '../utils/client'
+import { usePaymasterData } from '../hooks/usePaymasterData'
 
 export default function AAWallet() {
   const { address } = useAccount()
@@ -25,6 +26,8 @@ export default function AAWallet() {
   const [loading, setLoading] = useState(false)
   const [deploying, setDeploying] = useState(false)
   const [balance, setBalance] = useState<string>('')
+  const { getPaymasterAndData } = usePaymasterData();
+
 
   useEffect(() => {
     const initializeAA = async () => {
@@ -106,28 +109,10 @@ export default function AAWallet() {
         signature: '0x',
       }
 
-      const getPaymasterAndData = async (userOp: UserOperation) => {
-        try {
-          const response = await fetch('/api/generatePaymasterData', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ userOp }),
-          })
-      
-          if (!response.ok) {
-            throw new Error(`API call failed with status: ${response.status}`)
-          }
-      
-          const data = await response.json()
-          return data.paymasterAndData
-        } catch (error) {
-          console.error('Error fetching paymasterAndData:', error)
-          return '0x'
-        }
-      }
-      userOperation.paymasterAndData = await getPaymasterAndData(userOperation)
+
+      const paymasterAndData = await getPaymasterAndData(userOperation)
+      userOperation.paymasterAndData = paymasterAndData
+      console.log(userOperation.paymasterAndData)
 
       const entryPoint = getContract({
         address: ENTRY_POINT_ADDRESS,
@@ -205,18 +190,9 @@ export default function AAWallet() {
                     <span>Deployed</span>
                   </>
                 ) : deploying ? (
-                  <>
-                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-                    </svg>
-                    <span>Deploying...</span>
-                  </>
+                  <span>Deploying...</span>
                 ) : (
-                  <>
-                    <span className="text-lg">↗</span>
-                    <span>Deploy via Bundler</span>
-                  </>
+                  <span>Deploy via Bundler</span>
                 )}
               </button>
   

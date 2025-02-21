@@ -4,9 +4,9 @@ import { getContract, Hex } from 'viem'
 import { verifyingPaymasterAbi } from '@/app/abi/verifyingPaymaster'
 import { publicClient } from '@/app/utils/client'
 import type { UserOperation } from '@/app/lib/userOperationType'
+import { PAYMASTER_ADDRESS } from '@/app/constants/addresses'
 
 const PAYMASTER_PRIVATE_KEY = process.env.PAYMASTER_PRIVATE_KEY
-const PAYMASTER_ADDRESS = process.env.PAYMASTER_ADDRESS as Hex
 
 if (!PAYMASTER_PRIVATE_KEY || !PAYMASTER_ADDRESS) {
   throw new Error('Required environment variables are not set')
@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { userOp } = body
+    console.log(userOp)
 
     if (!userOp || !validateUserOp(userOp)) {
       return NextResponse.json(
