@@ -2,28 +2,21 @@
 import { useState, useEffect } from 'react'
 import { useAccount, useWalletClient } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { 
-  createPublicClient, 
-  http, 
+import {
   concat, 
   encodeFunctionData, 
   getContract,
   toHex,
   Hex,
-  createClient,
   formatEther,
 } from 'viem'
-import { sepolia } from 'viem/chains'
-import { bundlerActions } from 'viem/account-abstraction'
 import { accountFactoryAbi } from '../abi/accountFactory'
 import { entryPointAbi } from '../abi/entryPoint'
 import { verifyingPaymasterAbi } from '../abi/verifyingPaymaster'
 import { UserOperation } from '../lib/userOperationType'
 import { RefreshCcw } from 'lucide-react'
-
-const ENTRY_POINT_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
-const FACTORY_ADDRESS = '0x101DA2ce5A5733BAbc1956a71C5d640c8E6a113d'
-const PAYMASTER_ADDRESS = '0x415b4ceC5cf512CeDBE09C12081A0b75E13854Ff'
+import { ENTRY_POINT_ADDRESS, FACTORY_ADDRESS, PAYMASTER_ADDRESS } from '../constants/addresses'
+import { publicClient, bundlerClient } from '../utils/client'
 
 export default function AAWallet() {
   const { address } = useAccount()
@@ -33,18 +26,6 @@ export default function AAWallet() {
   const [loading, setLoading] = useState(false)
   const [deploying, setDeploying] = useState(false)
   const [balance, setBalance] = useState<string>('')
-
-  // Public Clientの作成
-  const publicClient = createPublicClient({
-    chain: sepolia,
-    transport: http(`https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`)
-  })
-
-  // Bundler Clientの作成
-  const bundlerClient = createClient({ 
-    chain: sepolia,
-    transport: http(`https://api.pimlico.io/v1/sepolia/rpc?apikey=${process.env.NEXT_PUBLIC_PIMLICO_API_KEY}`)
-  }).extend(bundlerActions)
 
   useEffect(() => {
     const initializeAA = async () => {
