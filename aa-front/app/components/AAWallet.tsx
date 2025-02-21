@@ -11,6 +11,7 @@ import {
   toHex,
   Hex,
   createClient,
+  formatEther,
 } from 'viem'
 import { sepolia } from 'viem/chains'
 import { bundlerActions } from 'viem/account-abstraction'
@@ -23,14 +24,14 @@ const ENTRY_POINT_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
 const FACTORY_ADDRESS = '0x101DA2ce5A5733BAbc1956a71C5d640c8E6a113d'
 const PAYMASTER_ADDRESS = '0x415b4ceC5cf512CeDBE09C12081A0b75E13854Ff'
 
-
 export default function AAWallet() {
   const { address } = useAccount()
   const { data: walletClient } = useWalletClient()
-  const [aaAddress, setAaAddress] = useState('')
+  const [aaAddress, setAaAddress] = useState<Hex>('0x')
   const [isDeployed, setIsDeployed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [deploying, setDeploying] = useState(false)
+  const [balance, setBalance] = useState<string>('')
 
   // Public Clientの作成
   const publicClient = createPublicClient({
@@ -65,6 +66,11 @@ export default function AAWallet() {
         const code = await publicClient.getCode({ address: predictedAddress })
         setIsDeployed(Boolean(code?.length))
 
+        if (Boolean(code?.length)) {
+          const balance = await publicClient.getBalance({ address: predictedAddress })
+          setBalance(formatEther(balance))
+        }
+
       } catch (error) {
         console.error('Error:', error)
       } finally {
@@ -73,8 +79,17 @@ export default function AAWallet() {
     }
 
     initializeAA()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletClient, address])
+  }, [walletClient, address, publicClient])
+
+  const updateBalance = async () => {
+    if (!aaAddress || !isDeployed) return
+    try {
+      const balance = await publicClient.getBalance({ address: aaAddress })
+      setBalance(formatEther(balance))
+    } catch (error) {
+      console.error('Error fetching balance:', error)
+    }
+  }
 
   const encodePaymasterAndData = ({
     paymaster: paymasterAddress,
@@ -95,8 +110,6 @@ export default function AAWallet() {
         client: publicClient
       })
 
-      // packメソッドがアセンブリの時はダミーデータが必要
-      // userOp.paymasterAndData = ('0x' + '00'.repeat(65 + 20)) as `0x${string}`  
       const userOpHash = await verifyingPaymaster.read.getHash([userOp])
       console.log("Hash from contract:", userOpHash);
 
@@ -119,9 +132,6 @@ export default function AAWallet() {
         paymaster: PAYMASTER_ADDRESS,
         data: signature,
       });
-  
-      // const verifyingSigner = await verifyingPaymaster.read.verifyingSigner()
-
       console.log("paymaster data:", paymasterAndData)
   
       return paymasterAndData
@@ -149,7 +159,6 @@ export default function AAWallet() {
         functionName: 'getNonce',
         args: [aaAddress, BigInt(0)],
       }) as bigint;
-      // console.log('nonce: ', nonce);
       
       // UserOperationの作成
       const userOperation: UserOperation = {
@@ -168,7 +177,6 @@ export default function AAWallet() {
 
       userOperation.paymasterAndData = await getPaymasterAndData(userOperation)
 
-      // UserOperationハッシュの計算と署名
       const entryPoint = getContract({
         address: ENTRY_POINT_ADDRESS,
         abi: entryPointAbi,
@@ -192,6 +200,8 @@ export default function AAWallet() {
 
       console.log('Transaction hash:', receipt.transactionHash)
       setIsDeployed(true)
+
+      await updateBalance()
 
     } catch (error) {
       console.error('Deploy error:', error)
@@ -225,6 +235,20 @@ export default function AAWallet() {
                 <span className="text-yellow-600">Not Deployed</span>
               )}
             </p>
+            {isDeployed && (
+              <div className="flex items-center space-x-2">
+                <p>
+                  <span className="font-semibold">Balance:</span>{' '}
+                  {balance ? `${balance} ETH` : 'Loading...'}
+                </p>
+                <button
+                  onClick={updateBalance}
+                  className="px-2 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300"
+                >
+                  🔄
+                </button>
+              </div>
+            )}
             {!isDeployed && !loading && (
               <button
                 onClick={deployAccount}
