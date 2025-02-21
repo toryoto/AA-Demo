@@ -2,28 +2,19 @@
 import { useState, useEffect } from 'react'
 import { useAccount, useWalletClient } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { 
-  createPublicClient, 
-  http, 
+import {
   concat, 
   encodeFunctionData, 
   getContract,
-  toHex,
   Hex,
-  createClient,
-  formatEther,
 } from 'viem'
-import { sepolia } from 'viem/chains'
-import { bundlerActions } from 'viem/account-abstraction'
 import { accountFactoryAbi } from '../abi/accountFactory'
-import { entryPointAbi } from '../abi/entryPoint'
-import { verifyingPaymasterAbi } from '../abi/verifyingPaymaster'
-import { UserOperation } from '../lib/userOperationType'
-import { RefreshCcw } from 'lucide-react'
-
-const ENTRY_POINT_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
-const FACTORY_ADDRESS = '0x101DA2ce5A5733BAbc1956a71C5d640c8E6a113d'
-const PAYMASTER_ADDRESS = '0x415b4ceC5cf512CeDBE09C12081A0b75E13854Ff'
+import { FACTORY_ADDRESS } from '../constants/addresses'
+import { publicClient } from '../utils/client'
+import { usePaymasterData } from '../hooks/usePaymasterData'
+import useUserOperation from '../hooks/useUserOperation'
+import { useUserOperationManager } from '../hooks/useExecuteUserOperation'
+import { useFetchAABalance } from '../hooks/useFetchAABalance'
 
 export default function AAWallet() {
   const { address } = useAccount()
@@ -32,19 +23,11 @@ export default function AAWallet() {
   const [isDeployed, setIsDeployed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [deploying, setDeploying] = useState(false)
-  const [balance, setBalance] = useState<string>('')
+  const { getPaymasterAndData } = usePaymasterData();
+  const { createUserOperation } = useUserOperation();
+  const { signAndSendUserOperation } = useUserOperationManager();
+  const { balance, isBalanceLoading } = useFetchAABalance(aaAddress);
 
-  // Public Clientの作成
-  const publicClient = createPublicClient({
-    chain: sepolia,
-    transport: http(`https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`)
-  })
-
-  // Bundler Clientの作成
-  const bundlerClient = createClient({ 
-    chain: sepolia,
-    transport: http(`https://api.pimlico.io/v1/sepolia/rpc?apikey=${process.env.NEXT_PUBLIC_PIMLICO_API_KEY}`)
-  }).extend(bundlerActions)
 
   useEffect(() => {
     const initializeAA = async () => {
@@ -63,15 +46,8 @@ export default function AAWallet() {
 
         setAaAddress(predictedAddress)
         
-        // デプロイ状態の確認
         const code = await publicClient.getCode({ address: predictedAddress })
         setIsDeployed(Boolean(code?.length))
-
-        if (Boolean(code?.length)) {
-          const balance = await publicClient.getBalance({ address: predictedAddress })
-          setBalance(formatEther(balance))
-        }
-
       } catch (error) {
         console.error('Error:', error)
       } finally {
@@ -80,68 +56,7 @@ export default function AAWallet() {
     }
 
     initializeAA()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletClient, address])
-
-  const updateBalance = async () => {
-    if (!aaAddress || !isDeployed) return
-    try {
-      const balance = await publicClient.getBalance({ address: aaAddress })
-      setBalance(formatEther(balance))
-    } catch (error) {
-      console.error('Error fetching balance:', error)
-    }
-  }
-
-  const encodePaymasterAndData = ({
-    paymaster: paymasterAddress,
-    data,
-  }: {
-    paymaster: Hex;
-    data: Hex;
-  }) => {
-    const encoded = `${paymasterAddress.replace('0x', '')}${data.replace('0x', '')}`;
-    return `0x${encoded}` as Hex;
-  };
-
-  const getPaymasterAndData = async (userOp: UserOperation) => {
-    try {
-      const verifyingPaymaster = getContract({
-        address: PAYMASTER_ADDRESS,
-        abi: verifyingPaymasterAbi,
-        client: publicClient
-      })
-
-      const userOpHash = await verifyingPaymaster.read.getHash([userOp])
-      console.log("Hash from contract:", userOpHash);
-
-      const response = await fetch('/api/paymaster/sign', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ hash: userOpHash }),
-      });
-  
-      if (!response.ok) {
-        throw new Error('Failed to fetch signature from API');
-      }
-  
-      const { signature } = await response.json();
-      console.log("Generated signature:", signature);
-  
-      const paymasterAndData = encodePaymasterAndData({
-        paymaster: PAYMASTER_ADDRESS,
-        data: signature,
-      });
-      console.log("paymaster data:", paymasterAndData)
-  
-      return paymasterAndData
-    } catch (error) {
-      console.error('Error getting paymaster signature:', error)
-      throw error
-    }
-  }
 
   const deployAccount = async () => {
     if (!address || !walletClient || !aaAddress) return
@@ -155,56 +70,18 @@ export default function AAWallet() {
           args: [address, 0]
         })
       ])
-      const nonce = await publicClient.readContract({
-        address: ENTRY_POINT_ADDRESS,
-        abi: entryPointAbi,
-        functionName: 'getNonce',
-        args: [aaAddress, BigInt(0)],
-      }) as bigint;
-      
-      // UserOperationの作成
-      const userOperation: UserOperation = {
-        sender: aaAddress as `0x${string}`,
-        nonce: toHex(nonce),
-        initCode,
-        callData: '0x',
-        callGasLimit: toHex(3_000_000),
-        verificationGasLimit: toHex(3_000_000),
-        preVerificationGas: toHex(3_000_000),
-        maxFeePerGas: toHex(2_000_000_000),
-        maxPriorityFeePerGas: toHex(2_000_000_000),
-        paymasterAndData: '0x',
-        signature: '0x',
-      }
+      const userOperation = await createUserOperation(aaAddress, initCode)
 
-      userOperation.paymasterAndData = await getPaymasterAndData(userOperation)
+      const paymasterAndData = await getPaymasterAndData(userOperation)
+      userOperation.paymasterAndData = paymasterAndData
+      console.log(userOperation.paymasterAndData)
 
-      const entryPoint = getContract({
-        address: ENTRY_POINT_ADDRESS,
-        abi: entryPointAbi,
-        client: publicClient
-      })
-      const userOpHashForSign = await entryPoint.read.getUserOpHash([userOperation])
-
-      const signature = await walletClient.signMessage({
-        message: { raw: userOpHashForSign as `0x${string}` }
-      })
-      userOperation.signature = signature
-
-      const userOpHash = await bundlerClient.request({
-        method: 'eth_sendUserOperation',
-        params: [userOperation, ENTRY_POINT_ADDRESS]
-      })
-
+      const userOpHash = await signAndSendUserOperation(userOperation)
       console.log('UserOperation Hash:', userOpHash)
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: userOpHash });
-
-      console.log('Transaction hash:', receipt.transactionHash)
+      // const receipt = await publicClient.waitForTransactionReceipt({ hash: userOpHash });
+      // console.log('Transaction hash:', receipt.transactionHash)
       setIsDeployed(true)
-
-      await updateBalance()
-
     } catch (error) {
       console.error('Deploy error:', error)
     } finally {
@@ -255,18 +132,9 @@ export default function AAWallet() {
                     <span>Deployed</span>
                   </>
                 ) : deploying ? (
-                  <>
-                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-                    </svg>
-                    <span>Deploying...</span>
-                  </>
+                  <span>Deploying...</span>
                 ) : (
-                  <>
-                    <span className="text-lg">↗</span>
-                    <span>Deploy via Bundler</span>
-                  </>
+                  <span>Deploy via Bundler</span>
                 )}
               </button>
   
@@ -274,15 +142,8 @@ export default function AAWallet() {
                 <div className="flex items-center gap-3 bg-gray-50 px-4 py-2 rounded-lg">
                   <p className="text-gray-700">
                     <span className="font-medium">Balance:</span>{' '}
-                    <span className="font-mono">{balance ? `${balance} ETH` : 'Loading...'}</span>
+                    {isBalanceLoading ? 'Loading...' : balance ? `${balance} ETH` : 'N/A'}
                   </p>
-                  <button
-                    onClick={updateBalance}
-                    className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-full transition-colors duration-200"
-                    title="Refresh balance"
-                  >
-                    <RefreshCcw className="w-4 h-4" />
-                  </button>
                 </div>
             )}
             </div>
