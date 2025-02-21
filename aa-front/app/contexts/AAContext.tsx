@@ -67,7 +67,7 @@ export function AAProvider({ children }: { children: ReactNode }) {
           args: [address, 0]
         })
       ])
-      const userOperation = await createUserOperation(aaAddress, initCode)
+      const userOperation = await createUserOperation({aaAddress, initCode})
 
       const paymasterAndData = await getPaymasterAndData(userOperation)
       userOperation.paymasterAndData = paymasterAndData

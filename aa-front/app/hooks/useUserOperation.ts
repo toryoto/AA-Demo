@@ -5,7 +5,7 @@ import { ENTRY_POINT_ADDRESS } from '../constants/addresses';
 import { entryPointAbi } from '../abi/entryPoint';
 
 function useUserOperation() {
-  const createUserOperation = async (aaAddress: Hex, initCode?: Hex): Promise<UserOperation> => {
+  const createUserOperation = async ({ aaAddress, initCode = '0x', callData = '0x' }: { aaAddress: Hex, initCode?: Hex, callData?: Hex }): Promise<UserOperation> => {
     try {
       const nonce = await publicClient.readContract({
         address: ENTRY_POINT_ADDRESS,
@@ -20,8 +20,8 @@ function useUserOperation() {
       return {
         sender: aaAddress,
         nonce: toHex(nonce),
-        initCode: initCode || '0x',
-        callData: '0x',
+        initCode,
+        callData,
         callGasLimit: toHex(3_000_000),
         verificationGasLimit: toHex(3_000_000),
         preVerificationGas: toHex(3_000_000),

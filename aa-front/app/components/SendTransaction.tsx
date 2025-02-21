@@ -4,6 +4,11 @@ import { Input } from './ui/input'
 import { Button } from './ui/button'
 import { ArrowRight, Loader2 } from 'lucide-react'
 import { useExecuteUserOperation } from '../hooks/useExecuteUserOperation'
+import useUserOperation from '../hooks/useUserOperation'
+import { usePaymasterData } from '../hooks/usePaymasterData'
+import { useAA } from '../hooks/useAA'
+import { encodeFunctionData, Hex, parseEther } from 'viem'
+import { bundlerClient } from '../utils/client'
 
 interface SendTransactionProps {
   isDeployed: boolean;
@@ -11,24 +16,62 @@ interface SendTransactionProps {
 
 export const SendTransaction: React.FC<SendTransactionProps> = ({ isDeployed }) => {
   const [sending, setSending] = useState(false)
-  const [recipient, setRecipient] = useState('')
+  const [recipient, setRecipient] = useState<Hex>('0x')
   const [amount, setAmount] = useState('')
-  const { execute } = useExecuteUserOperation();
+  const { createUserOperation } = useUserOperation()
+  const { getPaymasterAndData } = usePaymasterData()
+  const { execute } = useExecuteUserOperation()
+  const { aaAddress } = useAA()
+  
 
   const handleSend = async () => {
     setSending(true);
     try {
-      console.log(`Sending ${amount} ETH to ${recipient}`);
-      
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log(`Sending ${amount} ETH to ${recipient}`)
+      const callData = encodeFunctionData({
+        abi: [
+          {
+            type: 'function',
+            name: 'execute',
+            inputs: [
+              { type: 'address', name: 'dest' },
+              { type: 'uint256', name: 'value' },
+              { type: 'bytes', name: 'func' }
+            ],
+            outputs: [{ type: 'bytes', name: 'ret' }],
+            stateMutability: 'payable'
+          }
+        ],
+        functionName: 'execute',
+        args: [
+          recipient,
+          parseEther(amount),
+          '0x'
+        ]
+      })
 
-      setRecipient('');
-      setAmount('');
-      console.log('Transaction successful!');
+      const userOp = await createUserOperation({ aaAddress, callData})
+      console.log("userOp", userOp)
+
+      const paymasterAndData = await getPaymasterAndData(userOp)
+      userOp.paymasterAndData = paymasterAndData
+
+      const userOpHash = await execute(userOp)
+      console.log('UserOperation Hash:', userOpHash)
+
+      const receipt = await bundlerClient.waitForUserOperationReceipt({
+        hash: userOpHash
+      })
+
+      console.log(receipt)
+
+      setRecipient('0x')
+      setAmount('')
+      console.log('Transaction successful!')
     } catch (error) {
-      console.error('Transaction failed:', error);
+      console.error('Transaction failed:', error)
     } finally {
-      setSending(false);
+      setSending(false)
     }
   };
 
@@ -43,7 +86,7 @@ export const SendTransaction: React.FC<SendTransactionProps> = ({ isDeployed }) 
           <Input
             id="recipient"
             value={recipient}
-            onChange={(e) => setRecipient(e.target.value)}
+            onChange={(e) => setRecipient(e.target.value as Hex)}
             placeholder="0x..."
           />
         </div>
