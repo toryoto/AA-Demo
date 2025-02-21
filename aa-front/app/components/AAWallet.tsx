@@ -13,8 +13,13 @@ import { FACTORY_ADDRESS } from '../constants/addresses'
 import { publicClient } from '../utils/client'
 import { usePaymasterData } from '../hooks/usePaymasterData'
 import useUserOperation from '../hooks/useUserOperation'
-import { useUserOperationManager } from '../hooks/useExecuteUserOperation'
+import { useExecuteUserOperation } from '../hooks/useExecuteUserOperation'
 import { useFetchAABalance } from '../hooks/useFetchAABalance'
+import { Card, CardContent } from './ui/card'
+import { Label } from './ui/label'
+import { Input } from './ui/input'
+import { Button } from './ui/button'
+import { Wallet, ArrowRight, Check, Loader2 } from 'lucide-react'
 
 export default function AAWallet() {
   const { address } = useAccount()
@@ -25,9 +30,12 @@ export default function AAWallet() {
   const [deploying, setDeploying] = useState(false)
   const { getPaymasterAndData } = usePaymasterData();
   const { createUserOperation } = useUserOperation();
-  const { signAndSendUserOperation } = useUserOperationManager();
+  const { execute } = useExecuteUserOperation();
   const { balance, isBalanceLoading } = useFetchAABalance(aaAddress);
 
+  const [sending, setSending] = useState(false)
+  const [recipient, setRecipient] = useState('')
+  const [amount, setAmount] = useState('')
 
   useEffect(() => {
     const initializeAA = async () => {
@@ -76,11 +84,9 @@ export default function AAWallet() {
       userOperation.paymasterAndData = paymasterAndData
       console.log(userOperation.paymasterAndData)
 
-      const userOpHash = await signAndSendUserOperation(userOperation)
+      const userOpHash = await execute(userOperation)
       console.log('UserOperation Hash:', userOpHash)
 
-      // const receipt = await publicClient.waitForTransactionReceipt({ hash: userOpHash });
-      // console.log('Transaction hash:', receipt.transactionHash)
       setIsDeployed(true)
     } catch (error) {
       console.error('Deploy error:', error)
@@ -88,67 +94,119 @@ export default function AAWallet() {
       setDeploying(false)
     }
   }
+
+  const handleSend = async () => {
+    if (!isDeployed || !recipient || !amount) return
+    setSending(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      console.log('Sending', amount, 'ETH to', recipient)
+    } catch (error) {
+      console.error('Send error:', error)
+    } finally {
+      setSending(false)
+    }
+  }
   
   return (
-    <div className="p-4">
-      <ConnectButton />
-  
+    <div className="max-w-2xl mx-auto p-6 space-y-6">
+      <div className="flex justify-end">
+        <ConnectButton />
+      </div>
+
       {address && (
-        <div className="mt-4 space-y-4">
-          <h2 className="text-xl font-bold">Account Info</h2>
-          <div className="space-y-2">
-            <p>
-              <span className="font-semibold">EOA Address:</span> {address}
-            </p>
-            <p>
-              <span className="font-semibold">Smart Account Address:</span>{' '}
-              {loading ? 'Loading...' : aaAddress || 'Not created'}
-            </p>
-            <p>
-              <span className="font-semibold">Status:</span>{' '}
-              {loading ? (
-                'Checking...'
-              ) : isDeployed ? (
-                <span className="text-green-600">Deployed</span>
-              ) : (
-                <span className="text-yellow-600">Not Deployed</span>
-              )}
-            </p>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={deployAccount}
-                disabled={deploying || isDeployed || loading}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2
-                  ${isDeployed 
-                    ? 'bg-green-100 text-green-800 cursor-not-allowed'
-                    : deploying
-                      ? 'bg-blue-100 text-blue-800 cursor-wait'
-                      : 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700'
-                  }`}
-              >
-                {isDeployed ? (
-                  <>
-                    <span className="text-lg">✓</span>
-                    <span>Deployed</span>
-                  </>
-                ) : deploying ? (
-                  <span>Deploying...</span>
-                ) : (
-                  <span>Deploy via Bundler</span>
-                )}
-              </button>
-  
-              {isDeployed && (
-                <div className="flex items-center gap-3 bg-gray-50 px-4 py-2 rounded-lg">
-                  <p className="text-gray-700">
-                    <span className="font-medium">Balance:</span>{' '}
-                    {isBalanceLoading ? 'Loading...' : balance ? `${balance} ETH` : 'N/A'}
+        <Card>
+          <CardContent className="p-6 space-y-6">
+            <div className="space-y-4">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <Wallet className="h-6 w-6" />
+                Account Info
+              </h2>
+              
+              <div className="grid gap-3">
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <Label className="text-sm text-gray-500">EOA Address</Label>
+                  <p className="font-mono text-sm break-all">{address}</p>
+                </div>
+
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <Label className="text-sm text-gray-500">Smart Account Address</Label>
+                  <p className="font-mono text-sm break-all">
+                    {loading ? 'Loading...' : aaAddress || 'Not created'}
                   </p>
                 </div>
-            )}
+
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <Button
+                      onClick={deployAccount}
+                      disabled={deploying || isDeployed || loading}
+                      variant={isDeployed ? "secondary" : "default"}
+                      className={`w-full ${isDeployed ? "bg-green-100 text-green-800 hover:bg-green-100" : ""}`}
+                    >
+                      {isDeployed ? (
+                        <><Check className="h-4 w-4 mr-2" /> Deployed</>
+                      ) : deploying ? (
+                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Deploying...</>
+                      ) : (
+                        <>Deploy via Bundler</>
+                      )}
+                    </Button>
+                  </div>
+
+                  {isDeployed && !isBalanceLoading && (
+                    <div className="bg-gray-50 px-4 py-2 rounded-lg">
+                      <Label className="text-sm text-gray-500">Balance</Label>
+                      <p className="font-medium">{balance} ETH</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {isDeployed && (
+                <div className="pt-4 border-t space-y-4">
+                  <h3 className="text-lg font-semibold">Send Transaction</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <Label htmlFor="recipient">Recipient Address</Label>
+                      <Input
+                        id="recipient"
+                        value={recipient}
+                        onChange={(e) => setRecipient(e.target.value)}
+                        placeholder="0x..."
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="amount">Amount (ETH)</Label>
+                      <Input
+                        id="amount"
+                        type="number"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="0.0"
+                        step="0.0001"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleSend}
+                      disabled={sending || !recipient || !amount}
+                      className="w-full"
+                    >
+                      {sending ? (
+                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Sending...</>
+                      ) : (
+                        <>
+                          Send
+                          <ArrowRight className="h-4 w-4 ml-2" />
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   )

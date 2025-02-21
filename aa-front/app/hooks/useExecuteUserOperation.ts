@@ -5,13 +5,12 @@ import { bundlerClient, publicClient } from '../utils/client'
 import { UserOperation } from '../lib/userOperationType'
 import { useWalletClient } from 'wagmi'
 
-
-export function useUserOperationManager() {
+export function useExecuteUserOperation() {
   const { data: walletClient } = useWalletClient()
 
-  const signAndSendUserOperation = async (userOperation: UserOperation): Promise<Hex> => {
+  const executeBatch = async (userOperations: UserOperation[]): Promise<Hex[]> => {
     if (!walletClient) {
-      return '0x'
+      return ['0x']
     }
 
     const entryPoint = getContract({
@@ -19,20 +18,37 @@ export function useUserOperationManager() {
       abi: entryPointAbi,
       client: publicClient
     })
-    const userOpHashForSign = await entryPoint.read.getUserOpHash([userOperation])
+    
+    const signedUserOps = await Promise.all(
+      userOperations.map(async (userOp) => {
+        const userOpHashForSign = await entryPoint.read.getUserOpHash([userOp])
+        const signature = await walletClient.signMessage({
+          message: { raw: userOpHashForSign as `0x${string}` }
+        })
+        return { ...userOp, signature }
+      })
+    )
 
-    const signature = await walletClient.signMessage({
-      message: { raw: userOpHashForSign as `0x${string}` }
-    })
-    userOperation.signature = signature
+    // バンドラーに複数のUserOperationを送信
+    const userOpHashes = await Promise.all(
+      signedUserOps.map(async (userOp) => {
+        return bundlerClient.request({
+          method: 'eth_sendUserOperation',
+          params: [userOp, ENTRY_POINT_ADDRESS]
+        })
+      })
+    )
 
-    const userOpHash = await bundlerClient.request({
-      method: 'eth_sendUserOperation',
-      params: [userOperation, ENTRY_POINT_ADDRESS]
-    })
-
-    return userOpHash;
+    return userOpHashes
   }
 
-  return { signAndSendUserOperation };
+  const execute = async (userOperation: UserOperation): Promise<Hex> => {
+    const [hash] = await executeBatch([userOperation])
+    return hash
+  }
+
+  return { 
+    execute,
+    executeBatch 
+  }
 }
