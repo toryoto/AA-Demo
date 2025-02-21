@@ -6,17 +6,16 @@ import {
   concat, 
   encodeFunctionData, 
   getContract,
-  toHex,
   Hex,
   formatEther,
 } from 'viem'
 import { accountFactoryAbi } from '../abi/accountFactory'
-import { entryPointAbi } from '../abi/entryPoint'
-import { UserOperation } from '../lib/userOperationType'
 import { RefreshCcw } from 'lucide-react'
-import { ENTRY_POINT_ADDRESS, FACTORY_ADDRESS } from '../constants/addresses'
-import { publicClient, bundlerClient } from '../utils/client'
+import { FACTORY_ADDRESS } from '../constants/addresses'
+import { publicClient } from '../utils/client'
 import { usePaymasterData } from '../hooks/usePaymasterData'
+import useUserOperation from '../hooks/useUserOperation'
+import { useUserOperationManager } from '../hooks/useExecuteUserOperation'
 
 export default function AAWallet() {
   const { address } = useAccount()
@@ -27,6 +26,8 @@ export default function AAWallet() {
   const [deploying, setDeploying] = useState(false)
   const [balance, setBalance] = useState<string>('')
   const { getPaymasterAndData } = usePaymasterData();
+  const { createUserOperation } = useUserOperation();
+  const { signAndSendUserOperation } = useUserOperationManager();
 
 
   useEffect(() => {
@@ -87,50 +88,13 @@ export default function AAWallet() {
           args: [address, 0]
         })
       ])
-      const nonce = await publicClient.readContract({
-        address: ENTRY_POINT_ADDRESS,
-        abi: entryPointAbi,
-        functionName: 'getNonce',
-        args: [aaAddress, BigInt(0)],
-      }) as bigint;
-      
-      // UserOperationの作成
-      const userOperation: UserOperation = {
-        sender: aaAddress as `0x${string}`,
-        nonce: toHex(nonce),
-        initCode,
-        callData: '0x',
-        callGasLimit: toHex(3_000_000),
-        verificationGasLimit: toHex(3_000_000),
-        preVerificationGas: toHex(3_000_000),
-        maxFeePerGas: toHex(2_000_000_000),
-        maxPriorityFeePerGas: toHex(2_000_000_000),
-        paymasterAndData: '0x',
-        signature: '0x',
-      }
-
+      const userOperation = await createUserOperation(aaAddress, initCode)
 
       const paymasterAndData = await getPaymasterAndData(userOperation)
       userOperation.paymasterAndData = paymasterAndData
       console.log(userOperation.paymasterAndData)
 
-      const entryPoint = getContract({
-        address: ENTRY_POINT_ADDRESS,
-        abi: entryPointAbi,
-        client: publicClient
-      })
-      const userOpHashForSign = await entryPoint.read.getUserOpHash([userOperation])
-
-      const signature = await walletClient.signMessage({
-        message: { raw: userOpHashForSign as `0x${string}` }
-      })
-      userOperation.signature = signature
-
-      const userOpHash = await bundlerClient.request({
-        method: 'eth_sendUserOperation',
-        params: [userOperation, ENTRY_POINT_ADDRESS]
-      })
-
+      const userOpHash = await signAndSendUserOperation(userOperation)
       console.log('UserOperation Hash:', userOpHash)
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash: userOpHash });
@@ -139,7 +103,6 @@ export default function AAWallet() {
       setIsDeployed(true)
 
       await updateBalance()
-
     } catch (error) {
       console.error('Deploy error:', error)
     } finally {
