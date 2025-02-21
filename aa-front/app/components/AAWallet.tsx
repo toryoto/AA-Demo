@@ -12,10 +12,9 @@ import {
 } from 'viem'
 import { accountFactoryAbi } from '../abi/accountFactory'
 import { entryPointAbi } from '../abi/entryPoint'
-import { verifyingPaymasterAbi } from '../abi/verifyingPaymaster'
 import { UserOperation } from '../lib/userOperationType'
 import { RefreshCcw } from 'lucide-react'
-import { ENTRY_POINT_ADDRESS, FACTORY_ADDRESS, PAYMASTER_ADDRESS } from '../constants/addresses'
+import { ENTRY_POINT_ADDRESS, FACTORY_ADDRESS } from '../constants/addresses'
 import { publicClient, bundlerClient } from '../utils/client'
 
 export default function AAWallet() {
@@ -61,7 +60,6 @@ export default function AAWallet() {
     }
 
     initializeAA()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletClient, address])
 
   const updateBalance = async () => {
@@ -71,56 +69,6 @@ export default function AAWallet() {
       setBalance(formatEther(balance))
     } catch (error) {
       console.error('Error fetching balance:', error)
-    }
-  }
-
-  const encodePaymasterAndData = ({
-    paymaster: paymasterAddress,
-    data,
-  }: {
-    paymaster: Hex;
-    data: Hex;
-  }) => {
-    const encoded = `${paymasterAddress.replace('0x', '')}${data.replace('0x', '')}`;
-    return `0x${encoded}` as Hex;
-  };
-
-  const getPaymasterAndData = async (userOp: UserOperation) => {
-    try {
-      const verifyingPaymaster = getContract({
-        address: PAYMASTER_ADDRESS,
-        abi: verifyingPaymasterAbi,
-        client: publicClient
-      })
-
-      const userOpHash = await verifyingPaymaster.read.getHash([userOp])
-      console.log("Hash from contract:", userOpHash);
-
-      const response = await fetch('/api/paymaster/sign', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ hash: userOpHash }),
-      });
-  
-      if (!response.ok) {
-        throw new Error('Failed to fetch signature from API');
-      }
-  
-      const { signature } = await response.json();
-      console.log("Generated signature:", signature);
-  
-      const paymasterAndData = encodePaymasterAndData({
-        paymaster: PAYMASTER_ADDRESS,
-        data: signature,
-      });
-      console.log("paymaster data:", paymasterAndData)
-  
-      return paymasterAndData
-    } catch (error) {
-      console.error('Error getting paymaster signature:', error)
-      throw error
     }
   }
 
@@ -158,6 +106,27 @@ export default function AAWallet() {
         signature: '0x',
       }
 
+      const getPaymasterAndData = async (userOp: UserOperation) => {
+        try {
+          const response = await fetch('/api/generatePaymasterData', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ userOp }),
+          })
+      
+          if (!response.ok) {
+            throw new Error(`API call failed with status: ${response.status}`)
+          }
+      
+          const data = await response.json()
+          return data.paymasterAndData
+        } catch (error) {
+          console.error('Error fetching paymasterAndData:', error)
+          return '0x'
+        }
+      }
       userOperation.paymasterAndData = await getPaymasterAndData(userOperation)
 
       const entryPoint = getContract({
