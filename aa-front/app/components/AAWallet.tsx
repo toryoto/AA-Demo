@@ -17,9 +17,9 @@ import { useExecuteUserOperation } from '../hooks/useExecuteUserOperation'
 import { useFetchAABalance } from '../hooks/useFetchAABalance'
 import { Card, CardContent } from './ui/card'
 import { Label } from './ui/label'
-import { Input } from './ui/input'
 import { Button } from './ui/button'
-import { Wallet, ArrowRight, Check, Loader2 } from 'lucide-react'
+import { Wallet, Check, Loader2 } from 'lucide-react'
+import { SendTransaction } from './SendTransaction'
 
 export default function AAWallet() {
   const { address } = useAccount()
@@ -32,10 +32,6 @@ export default function AAWallet() {
   const { createUserOperation } = useUserOperation();
   const { execute } = useExecuteUserOperation();
   const { balance, isBalanceLoading } = useFetchAABalance(aaAddress);
-
-  const [sending, setSending] = useState(false)
-  const [recipient, setRecipient] = useState('')
-  const [amount, setAmount] = useState('')
 
   useEffect(() => {
     const initializeAA = async () => {
@@ -92,19 +88,6 @@ export default function AAWallet() {
       console.error('Deploy error:', error)
     } finally {
       setDeploying(false)
-    }
-  }
-
-  const handleSend = async () => {
-    if (!isDeployed || !recipient || !amount) return
-    setSending(true)
-    try {
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      console.log('Sending', amount, 'ETH to', recipient)
-    } catch (error) {
-      console.error('Send error:', error)
-    } finally {
-      setSending(false)
     }
   }
   
@@ -164,45 +147,7 @@ export default function AAWallet() {
               </div>
 
               {isDeployed && (
-                <div className="pt-4 border-t space-y-4">
-                  <h3 className="text-lg font-semibold">Send Transaction</h3>
-                  <div className="space-y-3">
-                    <div>
-                      <Label htmlFor="recipient">Recipient Address</Label>
-                      <Input
-                        id="recipient"
-                        value={recipient}
-                        onChange={(e) => setRecipient(e.target.value)}
-                        placeholder="0x..."
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="amount">Amount (ETH)</Label>
-                      <Input
-                        id="amount"
-                        type="number"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        placeholder="0.0"
-                        step="0.0001"
-                      />
-                    </div>
-                    <Button
-                      onClick={handleSend}
-                      disabled={sending || !recipient || !amount}
-                      className="w-full"
-                    >
-                      {sending ? (
-                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Sending...</>
-                      ) : (
-                        <>
-                          Send
-                          <ArrowRight className="h-4 w-4 ml-2" />
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
+                <SendTransaction isDeployed={isDeployed} />
               )}
             </div>
           </CardContent>
