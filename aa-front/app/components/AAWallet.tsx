@@ -1,96 +1,33 @@
+// components/AAWallet.tsx
 'use client'
-import { useState, useEffect } from 'react'
-import { useAccount, useWalletClient } from 'wagmi'
+import { useState } from 'react'
+import { useAccount } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import {
-  concat, 
-  encodeFunctionData, 
-  getContract,
-  Hex,
-} from 'viem'
-import { accountFactoryAbi } from '../abi/accountFactory'
-import { FACTORY_ADDRESS } from '../constants/addresses'
-import { publicClient } from '../utils/client'
-import { usePaymasterData } from '../hooks/usePaymasterData'
-import useUserOperation from '../hooks/useUserOperation'
-import { useExecuteUserOperation } from '../hooks/useExecuteUserOperation'
-import { useFetchAABalance } from '../hooks/useFetchAABalance'
+import { Wallet, Check, Loader2 } from 'lucide-react'
 import { Card, CardContent } from './ui/card'
 import { Label } from './ui/label'
 import { Button } from './ui/button'
-import { Wallet, Check, Loader2 } from 'lucide-react'
 import { SendTransaction } from './SendTransaction'
+import { useAA } from '../hooks/useAA';
+import { useFetchAABalance } from '../hooks/useFetchAABalance'
 
 export default function AAWallet() {
   const { address } = useAccount()
-  const { data: walletClient } = useWalletClient()
-  const [aaAddress, setAaAddress] = useState<Hex>('0x')
-  const [isDeployed, setIsDeployed] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const { aaAddress, isDeployed, loading, deployAccount } = useAA()
   const [deploying, setDeploying] = useState(false)
-  const { getPaymasterAndData } = usePaymasterData();
-  const { createUserOperation } = useUserOperation();
-  const { execute } = useExecuteUserOperation();
-  const { balance, isBalanceLoading } = useFetchAABalance(aaAddress);
+  const { balance, isBalanceLoading } = useFetchAABalance(aaAddress)
 
-  useEffect(() => {
-    const initializeAA = async () => {
-      if (!walletClient || !address) return
-      
-      setLoading(true)
-      try {
-        const factory = getContract({
-          address: FACTORY_ADDRESS,
-          abi: accountFactoryAbi,
-          client: publicClient
-        })
-
-        const salt = 0
-        const predictedAddress = await factory.read.getAddress([address, BigInt(salt)]) as Hex
-
-        setAaAddress(predictedAddress)
-        
-        const code = await publicClient.getCode({ address: predictedAddress })
-        setIsDeployed(Boolean(code?.length))
-      } catch (error) {
-        console.error('Error:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    initializeAA()
-  }, [walletClient, address])
-
-  const deployAccount = async () => {
-    if (!address || !walletClient || !aaAddress) return
+  const handleDeploy = async () => {
     setDeploying(true)
     try {
-      const initCode = concat([
-        FACTORY_ADDRESS,
-        encodeFunctionData({
-          abi: accountFactoryAbi,
-          functionName: 'createAccount',
-          args: [address, 0]
-        })
-      ])
-      const userOperation = await createUserOperation(aaAddress, initCode)
-
-      const paymasterAndData = await getPaymasterAndData(userOperation)
-      userOperation.paymasterAndData = paymasterAndData
-      console.log(userOperation.paymasterAndData)
-
-      const userOpHash = await execute(userOperation)
-      console.log('UserOperation Hash:', userOpHash)
-
-      setIsDeployed(true)
+      await deployAccount()
     } catch (error) {
       console.error('Deploy error:', error)
     } finally {
       setDeploying(false)
     }
   }
-  
+
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-6">
       <div className="flex justify-end">
@@ -122,7 +59,7 @@ export default function AAWallet() {
                 <div className="flex items-center gap-4">
                   <div className="flex-1">
                     <Button
-                      onClick={deployAccount}
+                      onClick={handleDeploy}
                       disabled={deploying || isDeployed || loading}
                       variant={isDeployed ? "secondary" : "default"}
                       className={`w-full ${isDeployed ? "bg-green-100 text-green-800 hover:bg-green-100" : ""}`}

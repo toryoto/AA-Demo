@@ -4,6 +4,7 @@ import { getDefaultConfig, RainbowKitProvider } from '@rainbow-me/rainbowkit'
 import { WagmiProvider, http } from 'wagmi'
 import { sepolia } from 'wagmi/chains'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { AAProvider } from '../contexts/AAContext'
 
 const config = getDefaultConfig({
   appName: 'ERC-4337 Demo',
@@ -22,7 +23,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <WagmiProvider config={config}>
         <RainbowKitProvider>
-          {children}
+          <AAProvider>
+            {children}
+          </AAProvider>
         </RainbowKitProvider>
       </WagmiProvider>
     </QueryClientProvider>
