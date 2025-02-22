@@ -29,7 +29,6 @@ export function useExecuteUserOperation() {
       })
     )
 
-    // バンドラーに複数のUserOperationを送信
     const userOpHashes = await Promise.all(
       signedUserOps.map(async (userOp) => {
         return bundlerClient.request({
@@ -47,8 +46,5 @@ export function useExecuteUserOperation() {
     return hash
   }
 
-  return { 
-    execute,
-    executeBatch 
-  }
+  return { execute, executeBatch }
 }
