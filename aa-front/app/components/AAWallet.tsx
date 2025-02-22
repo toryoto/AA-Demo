@@ -15,7 +15,7 @@ export default function AAWallet() {
   const { address } = useAccount()
   const { aaAddress, isDeployed, loading, deployAccount } = useAA()
   const [deploying, setDeploying] = useState(false)
-  const { balance, isBalanceLoading } = useFetchAABalance(aaAddress)
+  const { balance, isBalanceLoading, fetchBalance } = useFetchAABalance(aaAddress)
 
   const handleDeploy = async () => {
     setDeploying(true)
@@ -84,7 +84,10 @@ export default function AAWallet() {
               </div>
 
               {isDeployed && (
-                <SendTransaction isDeployed={isDeployed} />
+                <SendTransaction 
+                isDeployed={isDeployed} 
+                onTransactionComplete={fetchBalance} 
+              />
               )}
             </div>
           </CardContent>
