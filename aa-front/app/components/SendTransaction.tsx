@@ -18,9 +18,13 @@ interface TransactionInput {
 
 interface SendTransactionProps {
   isDeployed: boolean;
+  onTransactionComplete: () => void;
 }
 
-export const SendTransaction: React.FC<SendTransactionProps> = ({ isDeployed }) => {
+export const SendTransaction: React.FC<SendTransactionProps> = ({ 
+  isDeployed, 
+  onTransactionComplete
+}) => {
   const [sending, setSending] = useState(false)
   const [transactions, setTransactions] = useState<TransactionInput[]>([
     { recipient: '', amount: '' }
@@ -85,6 +89,7 @@ export const SendTransaction: React.FC<SendTransactionProps> = ({ isDeployed }) 
         const userOpHash = await execute(userOp)
         await bundlerClient.waitForUserOperationReceipt({ hash: userOpHash })
       }
+      onTransactionComplete();
 
       setTransactions([{ recipient: '', amount: '' }])
       console.log('Transaction successful!')
