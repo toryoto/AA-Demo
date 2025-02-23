@@ -16,7 +16,7 @@ import { bundlerClient, publicClient } from '../utils/client';
 import { TokenList } from './TokenList';
 import { useTokenContract } from '../hooks/useTokenContract';
 
-export const TokenCreation = () => {
+export const TokenCreation = ({isDeployed}: {isDeployed: boolean}) => {
   const [tokenName, setTokenName] = useState<string>('');
   const [tokenSymbol, setTokenSymbol] = useState<string>('');
   const [tokenSupply, setTokenSupply] = useState<string>('');
@@ -116,6 +116,7 @@ export const TokenCreation = () => {
       <TokenList 
         aaAddress={aaAddress}
         publicClient={publicClient}
+        isDeployed={isDeployed}
       />
     </>
   );
