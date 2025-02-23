@@ -110,7 +110,7 @@ export default function AAWallet() {
               </TabsContent>
 
               <TabsContent value="create">
-                <TokenCreation isDeployed={isDeployed} />
+                <TokenCreation />
               </TabsContent>
             </Tabs>
           )}

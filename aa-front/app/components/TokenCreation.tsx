@@ -5,21 +5,64 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Plus } from 'lucide-react';
+import { encodeFunctionData } from 'viem';
+import { tokenCreationFactoryAbi } from '../abi/tokenCreationFactory';
+import { TOKEN_CREATION_FACTORY_ADDRESS } from '../constants/addresses';
+import { SimpleAccountABI } from '../abi/simpleAccount';
+import useUserOperation from '../hooks/useUserOperation';
+import { usePaymasterData } from '../hooks/usePaymasterData';
+import { useExecuteUserOperation } from '../hooks/useExecuteUserOperation';
+import { useAA } from '../hooks/useAA';
+import { bundlerClient } from '../utils/client';
 
-export const TokenCreation = ({ isDeployed }: { isDeployed: boolean }) => {
-  const [tokenName, setTokenName] = useState('');
-  const [tokenSymbol, setTokenSymbol] = useState('');
-  const [tokenSupply, setTokenSupply] = useState('');
+export const TokenCreation = () => {
+  const [tokenName, setTokenName] = useState<string>('');
+  const [tokenSymbol, setTokenSymbol] = useState<string>('');
+  const [tokenSupply, setTokenSupply] = useState<string>('');
   const [isCreatingToken, setIsCreatingToken] = useState(false);
+
+  const { createUserOperation } = useUserOperation()
+  const { getPaymasterAndData } = usePaymasterData()
+  const { execute } = useExecuteUserOperation()
+  const { aaAddress } = useAA()
 
   const handleCreateToken = async () => {
     setIsCreatingToken(true);
     try {
-      console.log('Creating token:', {
-        name: tokenName,
-        symbol: tokenSymbol,
-        supply: tokenSupply
+      // executeに渡すfuncは呼び出すメソッドと引数をエンコードしたデータ（calldata）
+      const func = encodeFunctionData({
+          abi: tokenCreationFactoryAbi,
+          functionName: 'createToken',
+          args: [tokenName, tokenSymbol, tokenSupply]
+        })
+
+      // createTokenを実行するためのcallDataを生成
+      const callData = encodeFunctionData({
+        abi: SimpleAccountABI,
+        functionName: 'execute',
+        args: [TOKEN_CREATION_FACTORY_ADDRESS, '0x0', func]
+      })
+
+      // ウォレットアドレスと実行データのcallDataをもとにUserOpを作成
+      const userOp = await createUserOperation({ aaAddress, callData })
+      // 作成したUserOpをもとにPaymasterDataを作成
+      const paymasterAndData = await getPaymasterAndData(userOp)
+      userOp.paymasterAndData = paymasterAndData
+      console.log(userOp)
+
+      console.log({
+        tokenName,
+        tokenSymbol,
+        tokenSupply,
+        TOKEN_CREATION_FACTORY_ADDRESS,
+        encodedFunc: func,
+        encodedCallData: callData
       });
+
+      // UserOpの実行
+      const userOpHash = await execute(userOp)
+      const transactionHash = await bundlerClient.waitForUserOperationReceipt({ hash: userOpHash })
+      console.log(transactionHash)
     } catch (error) {
       console.error('Token creation error:', error);
     } finally {
