@@ -34,10 +34,8 @@ export const useTokenContract = (
   const { getPaymasterAndData } = usePaymasterData()
   const { execute } = useExecuteUserOperation()
 
-  // トークン残高を取得する関数
   const getTokenBalance = async (tokenAddress: string): Promise<bigint> => {
     try {
-      console.log(111111)
       const balance = await publicClient.readContract({
         address: tokenAddress as `0x${string}`,
         abi: erc20Abi,
@@ -45,7 +43,6 @@ export const useTokenContract = (
         args: [aaAddress]
       })
       console.log(tokenAddress)
-      console.log(balance)
       return balance as bigint;
     } catch (error) {
       console.error('Error fetching token balance:', error)
@@ -53,13 +50,24 @@ export const useTokenContract = (
     }
   }
 
+  const getImportedTokens = () => {
+    const stored = localStorage.getItem(`importedTokens_${aaAddress}`)
+    if (!stored) return []
+    try {
+      return JSON.parse(stored)
+    } catch {
+      return []
+    }
+  }
+
   // ユーザーのトークン一覧を取得する関数
   const getUserTokens = async (): Promise<void> => {
-    if (!aaAddress || isLoading) return;
-    
+    if (!aaAddress || isLoading) return
+
     try {
-      setIsLoading(true);
-      
+      setIsLoading(true)
+
+      // 作成したトークンを取得
       const userTokens = await publicClient.readContract({
         address: TOKEN_CREATION_FACTORY_ADDRESS,
         abi: tokenCreationFactoryAbi,
@@ -67,14 +75,23 @@ export const useTokenContract = (
         args: [aaAddress]
       }) as TokenInfo[]
 
-      setTokens(userTokens)
+      const importedTokens = getImportedTokens()
 
-      // 各トークンの残高を取得
-      const balancePromises = userTokens.map(async (token: TokenInfo) => {
-        const balance = await getTokenBalance(token.tokenAddress)
-        return { address: token.tokenAddress, balance }
-      })
+      // すべてのトークンアドレスを集約
+      const allTokenAddresses = new Set([
+        ...userTokens.map((t: TokenInfo) => t.tokenAddress.toLowerCase()),
+        ...importedTokens.map((t: { address: string }) => t.address.toLowerCase())
+      ])
+
+      // 全トークンの残高を取得
+      const balancePromises = Array.from(allTokenAddresses).map(async (address) => {
+        const balance = await getTokenBalance(address)
+        return { address, balance }
+      });
+
       const tokenBalances = await Promise.all(balancePromises)
+      
+      setTokens(userTokens)
       setBalances(tokenBalances)
     } catch (error) {
       console.error('Error fetching user tokens:', error)
@@ -83,28 +100,27 @@ export const useTokenContract = (
     } finally {
       setIsLoading(false)
     }
-  }
+  };
 
-  // ERC20トークンの所有者はapproveが不要だが、それ以外のアドレスはtransferの前にapproveする必要がある。
   const sendToken = async (tokenAddress: string, toAddress: string, amount: string): Promise<boolean> => {
     try {
-      const func1 = encodeFunctionData({
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [toAddress, amount]
-      })
-      const func2 = encodeFunctionData({
+      // const func1 = encodeFunctionData({
+      //   abi: erc20Abi,
+      //   functionName: 'approve',
+      //   args: [toAddress, amount]
+      // })
+      const func = encodeFunctionData({
         abi: erc20Abi,
         functionName: 'transfer',
         args: [toAddress, parseEther(amount)]
       })
-      const destinations = [tokenAddress, tokenAddress]
-      const values = ['0x0', '0x0']
+      // const destinations = [tokenAddress, tokenAddress]
+      // const values = ['0x0', '0x0']
 
       const callData = encodeFunctionData({
         abi: SimpleAccountABI,
-        functionName: 'executeBatch',
-        args: [destinations, values, [func1, func2]]
+        functionName: 'execute',
+        args: [tokenAddress, '0x0', func]
       })
 
       const userOp = await createUserOperation({ aaAddress, callData })

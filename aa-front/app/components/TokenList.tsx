@@ -1,13 +1,14 @@
-import React, { useEffect, useCallback, useState } from 'react';
-import { Card, CardContent } from './ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { Coins, ArrowUpRight, ArrowRight, Loader2 } from 'lucide-react';
-import { formatEther, Hex, PublicClient } from 'viem';
-import { useTokenContract } from '../hooks/useTokenContract';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import React, { useEffect, useCallback, useState } from 'react'
+import { Card, CardContent } from './ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table'
+import { Coins, ArrowUpRight, ArrowRight, Loader2, Plus } from 'lucide-react'
+import { formatEther, Hex, PublicClient, isAddress } from 'viem'
+import { useTokenContract } from '../hooks/useTokenContract'
+import { Button } from './ui/button'
+import { Input } from './ui/input'
+import { Label } from './ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
+import { useImportedTokens } from '../hooks/useImportedToken'
 
 interface TokenListProps {
   aaAddress: Hex;
@@ -32,20 +33,71 @@ export const TokenList: React.FC<TokenListProps> = ({
     isLoading,
     getUserTokens,
     sendToken
-  } = useTokenContract(publicClient, aaAddress);
+  } = useTokenContract(publicClient, aaAddress)
 
-  const [sending, setSending] = useState(false);
+  const {
+    importedTokens,
+    importToken,
+    removeToken
+  } = useImportedTokens(publicClient, aaAddress)
+
+  const [sending, setSending] = useState(false)
   const [transferInput, setTransferInput] = useState<TransferInput>({
     tokenAddress: '',
     recipient: '',
     amount: ''
-  });
+  })
+
+  const [newTokenAddress, setNewTokenAddress] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState('')
 
   useEffect(() => {
     if (aaAddress && aaAddress !== '0x') {
-      getUserTokens();
+      getUserTokens()
     }
-  }, [aaAddress]);
+  }, [aaAddress])
+
+  // 作成したトークンとインポートしたトークンを結合
+  const allTokens = React.useMemo(() => {
+    const createdTokenAddresses = new Set(tokens.map(t => t.tokenAddress.toLowerCase()));
+    
+    const importedTokenInfos = importedTokens
+      .filter(t => !createdTokenAddresses.has(t.address.toLowerCase()))
+      .map(t => ({
+        tokenAddress: t.address,
+        name: t.name,
+        symbol: t.symbol,
+        initialSupply: BigInt(0),
+        timestamp: BigInt(0)
+      }));
+
+    return [...tokens, ...importedTokenInfos]
+  }, [tokens, importedTokens])
+
+  const handleImport = async () => {
+    if (!isAddress(newTokenAddress)) {
+      setImportError('Invalid address format')
+      return;
+    }
+
+    setImporting(true)
+    setImportError('')
+
+    try {
+      const success = await importToken(newTokenAddress)
+      if (success) {
+        setNewTokenAddress('')
+      } else {
+        setImportError('Token already imported or invalid token contract')
+      }
+    } catch (error) {
+      console.log(error)
+      setImportError('Failed to import token')
+    } finally {
+      setImporting(false)
+    }
+  };
 
   const shortenAddress = useCallback((address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -63,62 +115,91 @@ export const TokenList: React.FC<TokenListProps> = ({
   }, []);
 
   const handleSend = async () => {
-    setSending(true);
+    setSending(true)
     try {
       await sendToken(
         transferInput.tokenAddress,
         transferInput.recipient,
         transferInput.amount
-      );
-      await getUserTokens();
+      )
+      await getUserTokens()
       
-      // フォームをリセット
       setTransferInput({
         tokenAddress: '',
         recipient: '',
         amount: ''
-      });
-      
-      console.log('Token transfer successful!');
+      })
     } catch (error) {
-      console.error('Token transfer failed:', error);
+      console.error('Token transfer failed:', error)
     } finally {
       setSending(false);
     }
   };
 
   const getSelectedTokenSymbol = () => {
-    const token = tokens.find(t => t.tokenAddress === transferInput.tokenAddress);
-    return token?.symbol || '';
+    const token = allTokens.find(t => t.tokenAddress === transferInput.tokenAddress)
+    return token?.symbol || ''
   };
 
   const getSelectedTokenBalance = () => {
-    const index = tokens.findIndex(t => t.tokenAddress === transferInput.tokenAddress);
-    if (index === -1) return '0';
-    return balances[index] ? formatEther(balances[index].balance) : '0';
-  };
+    const balance = balances.find(b => 
+      b.address.toLowerCase() === transferInput.tokenAddress.toLowerCase()
+    )?.balance
+    return balance ? formatEther(balance) : '0'
+  }
 
   const isValid = 
     transferInput.tokenAddress !== '' && 
     transferInput.recipient.length > 3 && 
     transferInput.amount && 
     parseFloat(transferInput.amount) > 0 &&
-    parseFloat(transferInput.amount) <= parseFloat(getSelectedTokenBalance());
+    parseFloat(transferInput.amount) <= parseFloat(getSelectedTokenBalance())
 
   return (
     <Card className="mt-6">
       <CardContent className="p-6">
         <div className="space-y-6">
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <Coins className="h-6 w-6" />
-            Your Tokens
-          </h2>
+          <div className="flex flex-col gap-4">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <Coins className="h-6 w-6" />
+              Your Tokens
+            </h2>
+            
+            {/* インポートフォーム */}
+            <div className="flex gap-2 items-start">
+              <div className="flex-1">
+                <Input
+                  placeholder="Import token address (0x...)"
+                  value={newTokenAddress}
+                  onChange={(e) => {
+                    setNewTokenAddress(e.target.value);
+                    setImportError('');
+                  }}
+                  disabled={importing}
+                />
+                {importError && (
+                  <p className="text-sm text-red-500 mt-1">{importError}</p>
+                )}
+              </div>
+              <Button
+                onClick={handleImport}
+                disabled={importing || !newTokenAddress}
+                size="default"
+              >
+                {importing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </div>
 
           {isLoading ? (
             <div className="text-center py-8">Loading...</div>
-          ) : tokens.length === 0 ? (
+          ) : allTokens.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              No tokens created yet
+              No tokens available
             </div>
           ) : (
             <Table>
@@ -129,38 +210,57 @@ export const TokenList: React.FC<TokenListProps> = ({
                   <TableHead>Balance</TableHead>
                   <TableHead>Contract</TableHead>
                   <TableHead>Created</TableHead>
+                  <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {tokens.map((token, index) => (
-                  <TableRow key={token.tokenAddress} className="hover:bg-gray-50">
-                    <TableCell className="font-medium">{token.name}</TableCell>
-                    <TableCell>{token.symbol}</TableCell>
-                    <TableCell>
-                      {balances[index] ? 
-                        formatEther(balances[index].balance) : '0'} {token.symbol}
-                    </TableCell>
-                    <TableCell>
-                      <a
-                        href={`https://sepolia.etherscan.io/address/${token.tokenAddress}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-blue-500 hover:text-blue-600"
-                      >
-                        {shortenAddress(token.tokenAddress)}
-                        <ArrowUpRight className="h-4 w-4" />
-                      </a>
-                    </TableCell>
-                    <TableCell>
-                      {formatTimestamp(token.timestamp)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {allTokens.map((token) => {
+                  const isImported = importedTokens.some(
+                    t => t.address.toLowerCase() === token.tokenAddress.toLowerCase()
+                  );
+                  
+                  return (
+                    <TableRow key={token.tokenAddress} className="hover:bg-gray-50">
+                      <TableCell className="font-medium">{token.name}</TableCell>
+                      <TableCell>{token.symbol}</TableCell>
+                      <TableCell>
+                        {formatEther(balances.find(b => 
+                          b.address.toLowerCase() === token.tokenAddress.toLowerCase()
+                        )?.balance || BigInt(0))} {token.symbol}
+                      </TableCell>
+                      <TableCell>
+                        <a
+                          href={`https://sepolia.etherscan.io/address/${token.tokenAddress}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-blue-500 hover:text-blue-600"
+                        >
+                          {shortenAddress(token.tokenAddress)}
+                          <ArrowUpRight className="h-4 w-4" />
+                        </a>
+                      </TableCell>
+                      <TableCell>
+                        {token.timestamp > 0 ? formatTimestamp(token.timestamp) : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {isImported && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeToken(token.tokenAddress)}
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
 
-          {isDeployed && tokens.length > 0 && (
+          {isDeployed && allTokens.length > 0 && (
             <div className="pt-4 border-t space-y-4">
               <h3 className="text-lg font-semibold">Send Tokens</h3>
               
@@ -177,16 +277,21 @@ export const TokenList: React.FC<TokenListProps> = ({
                       <SelectValue placeholder="Select a token" />
                     </SelectTrigger>
                     <SelectContent>
-                      {tokens.map((token, index) => (
-                        <SelectItem 
-                          key={token.tokenAddress} 
-                          value={token.tokenAddress}
-                          disabled={!balances[index] || balances[index].balance === BigInt(0)}
-                        >
-                          {token.symbol} ({balances[index] ? 
-                            formatEther(balances[index].balance) : '0'} available)
-                        </SelectItem>
-                      ))}
+                      {allTokens.map((token) => {
+                        const balance = balances.find(b => 
+                          b.address.toLowerCase() === token.tokenAddress.toLowerCase()
+                        )?.balance || BigInt(0);
+                        
+                        return (
+                          <SelectItem 
+                            key={token.tokenAddress} 
+                            value={token.tokenAddress}
+                            disabled={balance === BigInt(0)}
+                          >
+                            {token.symbol} ({formatEther(balance)} available)
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
@@ -249,5 +354,5 @@ export const TokenList: React.FC<TokenListProps> = ({
         </div>
       </CardContent>
     </Card>
-  );
-};
+  )
+}
