@@ -1,4 +1,3 @@
-// components/TokenCreation.tsx
 import React, { useState } from 'react';
 import { Card, CardContent } from './ui/card';
 import { Button } from './ui/button';
@@ -15,6 +14,7 @@ import { useExecuteUserOperation } from '../hooks/useExecuteUserOperation';
 import { useAA } from '../hooks/useAA';
 import { bundlerClient, publicClient } from '../utils/client';
 import { TokenList } from './TokenList';
+import { useTokenContract } from '../hooks/useTokenContract';
 
 export const TokenCreation = () => {
   const [tokenName, setTokenName] = useState<string>('');
@@ -22,69 +22,43 @@ export const TokenCreation = () => {
   const [tokenSupply, setTokenSupply] = useState<string>('');
   const [isCreatingToken, setIsCreatingToken] = useState(false);
 
-  const { createUserOperation } = useUserOperation()
-  const { getPaymasterAndData } = usePaymasterData()
-  const { execute } = useExecuteUserOperation()
-  const { aaAddress } = useAA()
+  const { createUserOperation } = useUserOperation();
+  const { getPaymasterAndData } = usePaymasterData();
+  const { execute } = useExecuteUserOperation();
+  const { aaAddress } = useAA();
+  const { getUserTokens } = useTokenContract(publicClient, aaAddress);
 
   const handleCreateToken = async () => {
     setIsCreatingToken(true);
     try {
-      // executeに渡すfuncは呼び出すメソッドと引数をエンコードしたデータ（calldata）
       const func = encodeFunctionData({
-          abi: tokenCreationFactoryAbi,
-          functionName: 'createToken',
-          args: [tokenName, tokenSymbol, tokenSupply]
-        })
+        abi: tokenCreationFactoryAbi,
+        functionName: 'createToken',
+        args: [tokenName, tokenSymbol, tokenSupply]
+      });
 
-      // createTokenを実行するためのcallDataを生成
       const callData = encodeFunctionData({
         abi: SimpleAccountABI,
         functionName: 'execute',
         args: [TOKEN_CREATION_FACTORY_ADDRESS, '0x0', func]
-      })
-
-      // ウォレットアドレスと実行データのcallDataをもとにUserOpを作成
-      const userOp = await createUserOperation({ aaAddress, callData })
-      // 作成したUserOpをもとにPaymasterDataを作成
-      const paymasterAndData = await getPaymasterAndData(userOp)
-      userOp.paymasterAndData = paymasterAndData
-      console.log(userOp)
-
-      console.log({
-        tokenName,
-        tokenSymbol,
-        tokenSupply,
-        TOKEN_CREATION_FACTORY_ADDRESS,
-        encodedFunc: func,
-        encodedCallData: callData
       });
 
-      // UserOpの実行
-      const userOpHash = await execute(userOp)
-      const transactionHash = await bundlerClient.waitForUserOperationReceipt({ hash: userOpHash })
-      console.log(transactionHash)
+      const userOp = await createUserOperation({ aaAddress, callData });
+      const paymasterAndData = await getPaymasterAndData(userOp);
+      userOp.paymasterAndData = paymasterAndData;
+
+      const userOpHash = await execute(userOp);
+      await bundlerClient.waitForUserOperationReceipt({ hash: userOpHash });
+      
+      await getUserTokens();
+      
+      setTokenName('');
+      setTokenSymbol('');
+      setTokenSupply('');
     } catch (error) {
       console.error('Token creation error:', error);
     } finally {
       setIsCreatingToken(false);
-    }
-  };
-
-  const tokenCreationFactoryContract = {
-    getUserTokens: async (address: string) => {
-      try {
-        const tokens = await publicClient.readContract({
-          address: TOKEN_CREATION_FACTORY_ADDRESS,
-          abi: tokenCreationFactoryAbi,
-          functionName: 'getUserTokens',
-          args: [address]
-        });
-        return tokens;
-      } catch (error) {
-        console.error('Error fetching user tokens:', error);
-        return [];
-      }
     }
   };
 
@@ -132,16 +106,16 @@ export const TokenCreation = () => {
                 onClick={handleCreateToken}
                 disabled={!tokenName || !tokenSymbol || !tokenSupply || isCreatingToken}
               >
-                Create Token
+                {isCreatingToken ? 'Creating...' : 'Create Token'}
               </Button>
             </div>
           </div>
         </CardContent>
       </Card>
+
       <TokenList 
         aaAddress={aaAddress}
         publicClient={publicClient}
-        tokenCreationFactoryContract={tokenCreationFactoryContract}
       />
     </>
   );
