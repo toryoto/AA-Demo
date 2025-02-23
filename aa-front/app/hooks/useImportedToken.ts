@@ -49,7 +49,7 @@ export const useImportedTokens = (publicClient: PublicClient, accountAddress: st
       console.error('Invalid token address:', error)
       return null
     }
-  }
+  };
 
   const importToken = async (address: string): Promise<boolean> => {
     // アドレスが既に存在するかチェック
