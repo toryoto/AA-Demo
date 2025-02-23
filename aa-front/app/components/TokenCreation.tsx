@@ -13,7 +13,8 @@ import useUserOperation from '../hooks/useUserOperation';
 import { usePaymasterData } from '../hooks/usePaymasterData';
 import { useExecuteUserOperation } from '../hooks/useExecuteUserOperation';
 import { useAA } from '../hooks/useAA';
-import { bundlerClient } from '../utils/client';
+import { bundlerClient, publicClient } from '../utils/client';
+import { TokenList } from './TokenList';
 
 export const TokenCreation = () => {
   const [tokenName, setTokenName] = useState<string>('');
@@ -70,54 +71,78 @@ export const TokenCreation = () => {
     }
   };
 
+  const tokenCreationFactoryContract = {
+    getUserTokens: async (address: string) => {
+      try {
+        const tokens = await publicClient.readContract({
+          address: TOKEN_CREATION_FACTORY_ADDRESS,
+          abi: tokenCreationFactoryAbi,
+          functionName: 'getUserTokens',
+          args: [address]
+        });
+        return tokens;
+      } catch (error) {
+        console.error('Error fetching user tokens:', error);
+        return [];
+      }
+    }
+  };
+
   return (
-    <Card>
-      <CardContent className="p-6">
-        <div className="space-y-6">
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <Plus className="h-6 w-6" />
-            Create New Token
-          </h2>
+    <>
+      <Card>
+        <CardContent className="p-6">
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <Plus className="h-6 w-6" />
+              Create New Token
+            </h2>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Token Name</Label>
-              <Input
-                placeholder="e.g. My Token"
-                value={tokenName}
-                onChange={(e) => setTokenName(e.target.value)}
-              />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Token Name</Label>
+                <Input
+                  placeholder="e.g. My Token"
+                  value={tokenName}
+                  onChange={(e) => setTokenName(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Token Symbol</Label>
+                <Input
+                  placeholder="e.g. MTK"
+                  value={tokenSymbol}
+                  onChange={(e) => setTokenSymbol(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Initial Supply</Label>
+                <Input
+                  type="number"
+                  placeholder="e.g. 1000000"
+                  value={tokenSupply}
+                  onChange={(e) => setTokenSupply(e.target.value)}
+                />
+              </div>
+
+              <Button 
+                className="w-full"
+                onClick={handleCreateToken}
+                disabled={!tokenName || !tokenSymbol || !tokenSupply || isCreatingToken}
+              >
+                Create Token
+              </Button>
             </div>
-
-            <div className="space-y-2">
-              <Label>Token Symbol</Label>
-              <Input
-                placeholder="e.g. MTK"
-                value={tokenSymbol}
-                onChange={(e) => setTokenSymbol(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Initial Supply</Label>
-              <Input
-                type="number"
-                placeholder="e.g. 1000000"
-                value={tokenSupply}
-                onChange={(e) => setTokenSupply(e.target.value)}
-              />
-            </div>
-
-            <Button 
-              className="w-full"
-              onClick={handleCreateToken}
-              disabled={!tokenName || !tokenSymbol || !tokenSupply || isCreatingToken}
-            >
-              Create Token
-            </Button>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+      <TokenList 
+        aaAddress={aaAddress}
+        publicClient={publicClient}
+        tokenCreationFactoryContract={tokenCreationFactoryContract}
+      />
+    </>
   );
 };
