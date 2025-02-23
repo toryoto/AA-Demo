@@ -68,7 +68,7 @@ export const TokenList: React.FC<TokenListProps> = ({
       await sendToken(
         transferInput.tokenAddress,
         transferInput.recipient,
-        BigInt(transferInput.amount)
+        transferInput.amount
       );
       await getUserTokens();
       

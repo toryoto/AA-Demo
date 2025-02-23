@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Plus } from 'lucide-react';
-import { encodeFunctionData } from 'viem';
+import { encodeFunctionData, parseEther } from 'viem';
 import { tokenCreationFactoryAbi } from '../abi/tokenCreationFactory';
 import { TOKEN_CREATION_FACTORY_ADDRESS } from '../constants/addresses';
 import { SimpleAccountABI } from '../abi/simpleAccount';
@@ -34,7 +34,7 @@ export const TokenCreation = ({isDeployed}: {isDeployed: boolean}) => {
       const func = encodeFunctionData({
         abi: tokenCreationFactoryAbi,
         functionName: 'createToken',
-        args: [tokenName, tokenSymbol, tokenSupply]
+        args: [tokenName, tokenSymbol, parseEther(tokenSupply)]
       });
 
       const callData = encodeFunctionData({
@@ -48,7 +48,8 @@ export const TokenCreation = ({isDeployed}: {isDeployed: boolean}) => {
       userOp.paymasterAndData = paymasterAndData;
 
       const userOpHash = await execute(userOp);
-      await bundlerClient.waitForUserOperationReceipt({ hash: userOpHash });
+      const receipt = await bundlerClient.waitForUserOperationReceipt({ hash: userOpHash });
+      console.log(receipt)
       
       await getUserTokens();
       

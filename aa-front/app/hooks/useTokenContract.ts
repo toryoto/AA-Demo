@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react'
-import { encodeFunctionData, Hex, PublicClient } from 'viem'
+import { useState } from 'react'
+import { encodeFunctionData, Hex, parseEther, PublicClient } from 'viem'
 import { tokenCreationFactoryAbi } from '../abi/tokenCreationFactory'
 import { TOKEN_CREATION_FACTORY_ADDRESS } from '../constants/addresses'
 import { erc20Abi } from '../abi/erc20'
@@ -35,30 +35,33 @@ export const useTokenContract = (
   const { execute } = useExecuteUserOperation()
 
   // トークン残高を取得する関数
-  const getTokenBalance = useCallback(async (tokenAddress: string): Promise<bigint> => {
+  const getTokenBalance = async (tokenAddress: string): Promise<bigint> => {
     try {
+      console.log(111111)
       const balance = await publicClient.readContract({
         address: tokenAddress as `0x${string}`,
         abi: erc20Abi,
         functionName: 'balanceOf',
         args: [aaAddress]
       })
+      console.log(tokenAddress)
+      console.log(balance)
       return balance as bigint;
     } catch (error) {
       console.error('Error fetching token balance:', error)
       return BigInt(0)
     }
-  }, [publicClient, aaAddress])
+  }
 
   // ユーザーのトークン一覧を取得する関数
-  const getUserTokens = useCallback(async (): Promise<void> => {
+  const getUserTokens = async (): Promise<void> => {
     if (!aaAddress || isLoading) return;
     
     try {
       setIsLoading(true);
       
       const userTokens = await publicClient.readContract({
-        address: TOKEN_CREATION_FACTORY_ADDRESS as `0x${string}`,
+        address: TOKEN_CREATION_FACTORY_ADDRESS,
         abi: tokenCreationFactoryAbi,
         functionName: 'getUserTokens',
         args: [aaAddress]
@@ -80,20 +83,28 @@ export const useTokenContract = (
     } finally {
       setIsLoading(false)
     }
-  }, [publicClient, aaAddress, getTokenBalance, isLoading])
+  }
 
-  const sendToken = async (tokenAddress: string, toAddress: string, amount: bigint): Promise<boolean> => {
+  // ERC20トークンの所有者はapproveが不要だが、それ以外のアドレスはtransferの前にapproveする必要がある。
+  const sendToken = async (tokenAddress: string, toAddress: string, amount: string): Promise<boolean> => {
     try {
-      const func = encodeFunctionData({
+      const func1 = encodeFunctionData({
         abi: erc20Abi,
         functionName: 'transfer',
         args: [toAddress, amount]
       })
+      const func2 = encodeFunctionData({
+        abi: erc20Abi,
+        functionName: 'transfer',
+        args: [toAddress, parseEther(amount)]
+      })
+      const destinations = [tokenAddress, tokenAddress]
+      const values = ['0x0', '0x0']
 
       const callData = encodeFunctionData({
         abi: SimpleAccountABI,
-        functionName: 'execute',
-        args: [tokenAddress, '0x0', func]
+        functionName: 'executeBatch',
+        args: [destinations, values, [func1, func2]]
       })
 
       const userOp = await createUserOperation({ aaAddress, callData })
@@ -102,7 +113,6 @@ export const useTokenContract = (
 
       const userOpHash = await execute(userOp)
       await bundlerClient.waitForUserOperationReceipt({ hash: userOpHash })
-
       return true
     } catch (error) {
       console.error('Error sending token:', error)
@@ -114,6 +124,7 @@ export const useTokenContract = (
     tokens,
     balances,
     isLoading,
+    getTokenBalance,
     getUserTokens,
     sendToken
   };
