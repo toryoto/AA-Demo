@@ -47,7 +47,6 @@ export const useTokenContract = (
     
     try {
       setIsLoading(true);
-      console.log('Fetching tokens for address:', aaAddress);
       
       const userTokens = await publicClient.readContract({
         address: TOKEN_CREATION_FACTORY_ADDRESS as `0x${string}`,
@@ -55,8 +54,6 @@ export const useTokenContract = (
         functionName: 'getUserTokens',
         args: [aaAddress]
       }) as TokenInfo[];
-
-      console.log('Tokens fetched:', userTokens.length);
 
       setTokens(userTokens);
 
