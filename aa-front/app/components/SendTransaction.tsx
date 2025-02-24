@@ -63,6 +63,8 @@ export const SendTransaction: React.FC<SendTransactionProps> = ({
           functionName: 'execute',
           args: [recipient, parseEther(amount), '0x']
         })
+        console.log(callData)
+        return
 
         const userOp = await createUserOperation({ aaAddress, callData })
         const paymasterAndData = await getPaymasterAndData(userOp)

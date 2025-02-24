@@ -1,6 +1,8 @@
 import { Metadata } from "next";
 import "./globals.css";
 import { Providers } from './utils/provider'
+import { Toaster } from 'sonner'
+
 
 export const metadata: Metadata = {
   title: "ERC4337 Demo",
@@ -17,6 +19,7 @@ export default function RootLayout({
       <body>
         <Providers>
           {children}
+          <Toaster />
         </Providers>
       </body>
     </html>
