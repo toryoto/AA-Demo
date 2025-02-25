@@ -3,10 +3,7 @@ import { PublicClient, formatEther, Hex, isAddress, encodeFunctionData, parseEth
 import { erc20Abi } from '../abi/erc20';
 import { SimpleAccountABI } from '../abi/simpleAccount';
 import { toast } from 'sonner';
-import useUserOperation from './useUserOperation';
-import { usePaymasterData } from './usePaymasterData';
-import { useExecuteUserOperation } from './useExecuteUserOperation';
-import { bundlerClient } from '../utils/client';
+import { useUserOperationExecutor } from './useUserOpExecutor';
 
 export interface TokenInfo {
   address: string;
@@ -23,10 +20,7 @@ export const useTokenManagement = (publicClient: PublicClient, aaAddress: Hex) =
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState('');
   const [isSending, setIsSending] = useState(false);
-
-  const { createUserOperation } = useUserOperation();
-  const { getPaymasterAndData } = usePaymasterData();
-  const { execute } = useExecuteUserOperation();
+  const { executeCallData } = useUserOperationExecutor(aaAddress);
 
   useEffect(() => {
     if (aaAddress && aaAddress !== '0x') {
@@ -178,14 +172,7 @@ export const useTokenManagement = (publicClient: PublicClient, aaAddress: Hex) =
         args: [tokenAddress, '0x0', transferCalldata]
       });
 
-      const userOp = await createUserOperation({ aaAddress, callData });
-      
-      const paymasterAndData = await getPaymasterAndData(userOp);
-      userOp.paymasterAndData = paymasterAndData;
-
-      const userOpHash = await execute(userOp);
-      
-      await bundlerClient.waitForUserOperationReceipt({ hash: userOpHash });
+      await executeCallData(callData)
       
       await updateTokenBalances();
     } catch (error) {
