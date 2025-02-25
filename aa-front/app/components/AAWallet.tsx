@@ -11,7 +11,8 @@ import {
   ArrowRightLeft,
   Shield,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  ArrowDownUp
 } from 'lucide-react';
 import { 
   Card, 
@@ -29,12 +30,18 @@ import { SendTransaction } from './SendTransaction';
 import { WrapToken } from './WrapToken';
 import { TokenCreation } from './TokenCreation';
 import { Hex } from 'viem';
+import { Swap } from './Swap';
+import { useTokenManagement } from '../hooks/useTokenManagement';
+import { publicClient } from '../utils/client';
 
 export default function AAWallet() {
   const { address, isConnected } = useAccount();
   const { aaAddress, isDeployed, loading, deployAccount } = useAA();
   const [deploying, setDeploying] = useState(false);
   const { balance, isBalanceLoading, fetchBalance } = useFetchAABalance(aaAddress);
+  const { tokens } = useTokenManagement(publicClient, aaAddress);
+
+
 
   const handleDeploy = async () => {
     setDeploying(true);
@@ -213,7 +220,7 @@ export default function AAWallet() {
 
       {isDeployed && (
         <Tabs defaultValue="transactions" className="w-full space-y-6">
-          <TabsList className="grid w-full grid-cols-3 bg-slate-100 p-1">
+          <TabsList className="grid w-full grid-cols-4 bg-slate-100 p-1">
             <TabsTrigger value="transactions" className="data-[state=active]:bg-white">
               <Send className="h-4 w-4 mr-2" />
               <span>Send</span>
@@ -221,6 +228,10 @@ export default function AAWallet() {
             <TabsTrigger value="wrap" className="data-[state=active]:bg-white">
               <ArrowRightLeft className="h-4 w-4 mr-2" />
               <span>Wrap</span>
+            </TabsTrigger>
+            <TabsTrigger value="swap" className="data-[state=active]:bg-white">
+              <ArrowDownUp className="h-4 w-4 mr-2" />
+              <span>Swap</span>
             </TabsTrigger>
             <TabsTrigger value="create" className="data-[state=active]:bg-white">
               <Coins className="h-4 w-4 mr-2" />
@@ -241,6 +252,14 @@ export default function AAWallet() {
 
           <TabsContent value="create" className="space-y-4 mt-6">
             <TokenCreation isDeployed={isDeployed} />
+          </TabsContent>
+
+          <TabsContent value="swap" className="space-y-4 mt-6">
+            <Swap
+              isDeployed={isDeployed} 
+              userTokens={tokens}
+              onSwapComplete={fetchBalance}
+            />
           </TabsContent>
         </Tabs>
       )}
