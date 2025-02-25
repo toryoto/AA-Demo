@@ -4,9 +4,7 @@ import { concat, encodeFunctionData, getContract, Hex } from 'viem';
 import { accountFactoryAbi } from '../abi/accountFactory';
 import { FACTORY_ADDRESS } from '../constants/addresses';
 import { publicClient } from '../utils/client';
-import { usePaymasterData } from '../hooks/usePaymasterData';
-import useUserOperation from '../hooks/useUserOperation';
-import { useExecuteUserOperation } from '../hooks/useExecuteUserOperation';
+import { useUserOperationExecutor } from '../hooks/useUserOpExecutor';
 
 interface AAContextType {
   aaAddress: Hex;
@@ -23,9 +21,8 @@ export function AAProvider({ children }: { children: ReactNode }) {
   const [aaAddress, setAaAddress] = useState<Hex>('0x');
   const [isDeployed, setIsDeployed] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { getPaymasterAndData } = usePaymasterData();
-  const { createUserOperation } = useUserOperation();
-  const { execute } = useExecuteUserOperation();
+  const { executeCallData } = useUserOperationExecutor(aaAddress);
+
 
   useEffect(() => {
     const initializeAA = async () => {
@@ -67,15 +64,9 @@ export function AAProvider({ children }: { children: ReactNode }) {
           args: [address, 0]
         })
       ])
-      const userOperation = await createUserOperation({aaAddress, initCode})
-
-      const paymasterAndData = await getPaymasterAndData(userOperation)
-      userOperation.paymasterAndData = paymasterAndData
-      console.log(userOperation.paymasterAndData)
-      const userOpHash = await execute(userOperation)
-      console.log('UserOperation Hash:', userOpHash)
-
+      await executeCallData('0x', { initCode })
       setIsDeployed(true)
+      return
     } catch (error) {
       console.error('Deploy error:', error)
     }

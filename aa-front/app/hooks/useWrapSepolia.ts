@@ -1,11 +1,9 @@
 import { encodeFunctionData, Hex, parseEther, formatEther } from "viem"
 import { wrappedSepolia } from "../abi/wrappedSepolia"
 import { SimpleAccountABI } from "../abi/simpleAccount"
-import useUserOperation from "./useUserOperation"
-import { usePaymasterData } from "./usePaymasterData"
-import { useExecuteUserOperation } from "./useExecuteUserOperation"
-import { bundlerClient, publicClient } from "../utils/client"
+import { publicClient } from "../utils/client"
 import { WRAPPED_SEPOLIA_ADDRESS } from "../constants/addresses"
+import { useUserOperationExecutor } from "./useUserOpExecutor"
 
 interface TransactionResult {
   success: boolean
@@ -14,34 +12,7 @@ interface TransactionResult {
 }
 
 export function useWrapSepolia(aaAddress: Hex) {
-  const { createUserOperation } = useUserOperation()
-  const { getPaymasterAndData } = usePaymasterData()
-  const { execute } = useExecuteUserOperation()
-
-  const executeUserOp = async (callData: Hex): Promise<TransactionResult> => {
-    try {
-      const userOp = await createUserOperation({ aaAddress, callData })
-      const paymasterAndData = await getPaymasterAndData(userOp)
-      userOp.paymasterAndData = paymasterAndData
-
-      const userOpHash = await execute(userOp)
-      const receipt = await bundlerClient.waitForUserOperationReceipt({ 
-        hash: userOpHash,
-        timeout: 30000,
-      })
-      console.log(receipt)
-
-      return {
-        success: true,
-        hash: receipt.receipt.transactionHash
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error occurred"
-      }
-    }
-  }
+  const { executeCallData } = useUserOperationExecutor(aaAddress);
 
   const deposit = async (amount: string): Promise<TransactionResult> => {
     try {
@@ -61,7 +32,7 @@ export function useWrapSepolia(aaAddress: Hex) {
         args: [WRAPPED_SEPOLIA_ADDRESS, parseEther(amount), func]
       })
 
-      return await executeUserOp(callData)
+      return await executeCallData(callData)
     } catch (error) {
       return {
         success: false,
@@ -93,7 +64,7 @@ export function useWrapSepolia(aaAddress: Hex) {
         args: [WRAPPED_SEPOLIA_ADDRESS, '0x0', func]
       })
 
-      return await executeUserOp(callData)
+      return await executeCallData(callData)
     } catch (error) {
       return {
         success: false,
@@ -141,7 +112,7 @@ export function useWrapSepolia(aaAddress: Hex) {
         args: [WRAPPED_SEPOLIA_ADDRESS, '0x0', func]
       })
 
-      return await executeUserOp(callData)
+      return await executeCallData(callData)
     } catch (error) {
       return {
         success: false,

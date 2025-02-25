@@ -21,13 +21,10 @@ import {
   CardTitle 
 } from './ui/card';
 import { Alert, AlertDescription } from './ui/alert';
-import { useExecuteUserOperation } from '../hooks/useExecuteUserOperation';
-import useUserOperation from '../hooks/useUserOperation';
-import { usePaymasterData } from '../hooks/usePaymasterData';
 import { useAA } from '../hooks/useAA';
 import { encodeFunctionData, Hex, parseEther } from 'viem';
-import { bundlerClient } from '../utils/client';
 import { SimpleAccountABI } from '../abi/simpleAccount';
+import { useUserOperationExecutor } from '../hooks/useUserOpExecutor';
 
 interface TransactionInput {
   recipient: Hex | '';
@@ -49,10 +46,9 @@ export const SendTransaction: React.FC<SendTransactionProps> = ({
   ]);
   const [result, setResult] = useState<{success?: boolean; hash?: string; error?: string} | null>(null);
   
-  const { createUserOperation } = useUserOperation();
-  const { getPaymasterAndData } = usePaymasterData();
-  const { execute } = useExecuteUserOperation();
   const { aaAddress } = useAA();
+  const { executeCallData } = useUserOperationExecutor(aaAddress);
+
 
   const addTransaction = () => {
     setTransactions([...transactions, { recipient: '', amount: '' }]);
@@ -80,43 +76,29 @@ export const SendTransaction: React.FC<SendTransactionProps> = ({
     
     try {
       if (transactions.length === 1) {
-        // Single transaction
         const { recipient, amount } = transactions[0];
         const callData = encodeFunctionData({
           abi: SimpleAccountABI,
           functionName: 'execute',
           args: [recipient, parseEther(amount), '0x']
         });
-        
-        const userOp = await createUserOperation({ aaAddress, callData });
-        const paymasterAndData = await getPaymasterAndData(userOp);
-        userOp.paymasterAndData = paymasterAndData;
-
-        const userOpHash = await execute(userOp);
-        const receipt = await bundlerClient.waitForUserOperationReceipt({ hash: userOpHash });
+        const { receipt } = await await executeCallData(callData)
         
         setResult({
           success: true,
           hash: receipt.receipt.transactionHash
         });
       } else {
-        // Batch transaction
         const targets = transactions.map(tx => tx.recipient);
         const values = transactions.map(tx => parseEther(tx.amount));
-        const datas = transactions.map(() => '0x' as Hex);  // Empty data for simple transfers
+        const datas = transactions.map(() => '0x' as Hex);
 
         const callData = encodeFunctionData({
           abi: SimpleAccountABI,
           functionName: 'executeBatch',
           args: [targets, values, datas]
         });
-
-        const userOp = await createUserOperation({ aaAddress, callData });
-        const paymasterAndData = await getPaymasterAndData(userOp);
-        userOp.paymasterAndData = paymasterAndData;
-
-        const userOpHash = await execute(userOp);
-        const receipt = await bundlerClient.waitForUserOperationReceipt({ hash: userOpHash });
+        const { receipt } = await await executeCallData(callData)
         
         setResult({
           success: true,

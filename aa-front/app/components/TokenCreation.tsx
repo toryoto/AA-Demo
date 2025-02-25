@@ -8,14 +8,12 @@ import { encodeFunctionData, parseEther } from 'viem';
 import { tokenCreationFactoryAbi } from '../abi/tokenCreationFactory';
 import { TOKEN_CREATION_FACTORY_ADDRESS } from '../constants/addresses';
 import { SimpleAccountABI } from '../abi/simpleAccount';
-import useUserOperation from '../hooks/useUserOperation';
-import { usePaymasterData } from '../hooks/usePaymasterData';
-import { useExecuteUserOperation } from '../hooks/useExecuteUserOperation';
 import { useAA } from '../hooks/useAA';
-import { bundlerClient, publicClient } from '../utils/client';
+import { publicClient } from '../utils/client';
 import { TokenList } from './TokenList';
 import { useTokenManagement } from '../hooks/useTokenManagement';
 import { toast } from 'sonner';
+import { useUserOperationExecutor } from '../hooks/useUserOpExecutor';
 
 export const TokenCreation = ({isDeployed}: {isDeployed: boolean}) => {
   const [tokenName, setTokenName] = useState<string>('');
@@ -23,10 +21,8 @@ export const TokenCreation = ({isDeployed}: {isDeployed: boolean}) => {
   const [tokenSupply, setTokenSupply] = useState<string>('');
   const [isCreatingToken, setIsCreatingToken] = useState(false);
 
-  const { createUserOperation } = useUserOperation();
-  const { getPaymasterAndData } = usePaymasterData();
-  const { execute } = useExecuteUserOperation();
   const { aaAddress } = useAA();
+  const { executeCallData } = useUserOperationExecutor(aaAddress);
   
   const { updateTokenBalances } = useTokenManagement(publicClient, aaAddress);
 
@@ -49,16 +45,7 @@ export const TokenCreation = ({isDeployed}: {isDeployed: boolean}) => {
         args: [TOKEN_CREATION_FACTORY_ADDRESS, '0x0', func]
       });
 
-      const userOp = await createUserOperation({ aaAddress, callData });
-      const paymasterAndData = await getPaymasterAndData(userOp);
-      userOp.paymasterAndData = paymasterAndData;
-
-      const userOpHash = await execute(userOp);
-      toast.loading('Waiting for confirmation...', {
-        id: toastId
-      });
-
-      const receipt = await bundlerClient.waitForUserOperationReceipt({ hash: userOpHash });
+      const { receipt } = await executeCallData(callData)
       
       if (receipt.success) {
         toast.success('Token created successfully', {
@@ -72,7 +59,6 @@ export const TokenCreation = ({isDeployed}: {isDeployed: boolean}) => {
           )
         });
 
-        // 統合したフックのupdateTokenBalancesメソッドを使用してトークン情報を更新
         await updateTokenBalances();
         
         setTokenName('');
