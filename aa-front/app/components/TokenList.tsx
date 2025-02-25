@@ -264,30 +264,6 @@ export const TokenList: React.FC<TokenListProps> = ({
                     Insufficient balance
                   </p>
                 )}
-                
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      setAmount(getSelectedTokenBalance());
-                    }}
-                    disabled={sending}
-                  >
-                    Max
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      const half = parseFloat(getSelectedTokenBalance()) / 2;
-                      setAmount(half.toString());
-                    }}
-                    disabled={sending}
-                  >
-                    Half
-                  </Button>
-                </div>
               </div>
             </div>
             
