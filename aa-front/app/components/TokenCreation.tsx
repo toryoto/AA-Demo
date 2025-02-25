@@ -14,7 +14,7 @@ import { useExecuteUserOperation } from '../hooks/useExecuteUserOperation';
 import { useAA } from '../hooks/useAA';
 import { bundlerClient, publicClient } from '../utils/client';
 import { TokenList } from './TokenList';
-import { useTokenContract } from '../hooks/useTokenContract';
+import { useTokenManagement } from '../hooks/useTokenManagement';
 import { toast } from 'sonner';
 
 export const TokenCreation = ({isDeployed}: {isDeployed: boolean}) => {
@@ -27,7 +27,8 @@ export const TokenCreation = ({isDeployed}: {isDeployed: boolean}) => {
   const { getPaymasterAndData } = usePaymasterData();
   const { execute } = useExecuteUserOperation();
   const { aaAddress } = useAA();
-  const { getUserTokens } = useTokenContract(publicClient, aaAddress);
+  
+  const { updateTokenBalances } = useTokenManagement(publicClient, aaAddress);
 
   const handleCreateToken = async () => {
     setIsCreatingToken(true);
@@ -71,7 +72,9 @@ export const TokenCreation = ({isDeployed}: {isDeployed: boolean}) => {
           )
         });
 
-        await getUserTokens();
+        // 統合したフックのupdateTokenBalancesメソッドを使用してトークン情報を更新
+        await updateTokenBalances();
+        
         setTokenName('');
         setTokenSymbol('');
         setTokenSupply('');

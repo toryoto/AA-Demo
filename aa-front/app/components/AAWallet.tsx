@@ -23,7 +23,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
-import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { useAA } from '../hooks/useAA';
 import { useFetchAABalance } from '../hooks/useFetchAABalance';
 import { SendTransaction } from './SendTransaction';
@@ -36,7 +35,6 @@ export default function AAWallet() {
   const { aaAddress, isDeployed, loading, deployAccount } = useAA();
   const [deploying, setDeploying] = useState(false);
   const { balance, isBalanceLoading, fetchBalance } = useFetchAABalance(aaAddress);
-  const [showTip, setShowTip] = useState(true);
 
   const handleDeploy = async () => {
     setDeploying(true);
@@ -87,28 +85,6 @@ export default function AAWallet() {
         </div>
         <ConnectButton />
       </div>
-
-      {showTip && (
-        <Alert className="bg-blue-50 border-blue-200 mb-6">
-          <div className="flex gap-3">
-            <Shield className="h-5 w-5 text-blue-600 mt-0.5" />
-            <div>
-              <AlertTitle className="text-blue-800">Welcome to ERC-4337 Smart Accounts</AlertTitle>
-              <AlertDescription className="text-blue-700 mt-1">
-                Experience account abstraction with social logins, gasless transactions, bundled operations, and seamless token management.
-              </AlertDescription>
-            </div>
-          </div>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="absolute top-3 right-3 text-blue-600 hover:text-blue-800 hover:bg-blue-100"
-            onClick={() => setShowTip(false)}
-          >
-            Dismiss
-          </Button>
-        </Alert>
-      )}
 
       <Card className="border-slate-200 shadow-sm overflow-hidden">
         <CardHeader className="bg-slate-50 border-b border-slate-200 pb-4">

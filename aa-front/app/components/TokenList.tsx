@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { 
   Coins, 
   ArrowUpRight, 
@@ -18,10 +18,8 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Alert, AlertDescription } from './ui/alert';
 import { Badge } from './ui/badge';
-import { formatEther, Hex, PublicClient, isAddress } from 'viem';
-import { erc20Abi } from '../abi/erc20';
-import { toast } from 'sonner';
-import { useTokenContract } from '../hooks/useTokenContract';
+import { Hex, PublicClient } from 'viem';
+import { TokenInfo, useTokenManagement } from '../hooks/useTokenManagement';
 
 interface TokenListProps {
   aaAddress: Hex;
@@ -29,23 +27,12 @@ interface TokenListProps {
   isDeployed: boolean;
 }
 
-interface TokenInfo {
-  address: string;
-  name: string;
-  symbol: string;
-  balance: string;
-}
-
 export const TokenList: React.FC<TokenListProps> = ({ 
   aaAddress,
   publicClient,
   isDeployed
 }) => {
-  const [tokens, setTokens] = useState<TokenInfo[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [newTokenAddress, setNewTokenAddress] = useState('');
-  const [importing, setImporting] = useState(false);
-  const [importError, setImportError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
@@ -54,145 +41,15 @@ export const TokenList: React.FC<TokenListProps> = ({
   const [sending, setSending] = useState(false);
   const [txStatus, setTxStatus] = useState<{status: 'success' | 'error', message: string} | null>(null);
 
-  const { sendToken } = useTokenContract(publicClient, aaAddress);
+  const { tokens, isLoading, importing, importError, setImportError, importToken, removeToken, updateTokenBalances, sendToken } = useTokenManagement(publicClient, aaAddress);
 
-  useEffect(() => {
-    if (aaAddress && aaAddress !== '0x') {
-      loadTokens();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aaAddress]);
-
-  useEffect(() => {
-    if (tokens.length > 0 && aaAddress && aaAddress !== '0x') {
-      updateTokenBalances();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tokens.length, aaAddress]);
-
-  const loadTokens = () => {
-    if (!aaAddress) return;
+  const handleImportToken = async () => {
+    if (!newTokenAddress) return;
     
-    const storedTokens = localStorage.getItem(`imported_tokens_${aaAddress}`);
-    if (storedTokens) {
-      try {
-        setTokens(JSON.parse(storedTokens));
-      } catch (error) {
-        console.error('Error parsing stored tokens:', error);
-        setTokens([]);
-      }
-    }
-  };
-
-  const updateTokenBalances = async () => {
-    if (!aaAddress || tokens.length === 0) return;
-    
-    setIsLoading(true);
-    
-    try {
-      const updatedTokens = await Promise.all(
-        tokens.map(async (token) => {
-          try {
-            const balance = await publicClient.readContract({
-              address: token.address as `0x${string}`,
-              abi: erc20Abi,
-              functionName: 'balanceOf',
-              args: [aaAddress]
-            });
-            
-            return {
-              ...token,
-              balance: formatEther(balance as bigint)
-            };
-          } catch (error) {
-            console.error(`Error fetching balance for token ${token.address}:`, error);
-            return {
-              ...token,
-              balance: '0'
-            };
-          }
-        })
-      );
-      
-      setTokens(updatedTokens);
-      localStorage.setItem(`imported_tokens_${aaAddress}`, JSON.stringify(updatedTokens));
-    } catch (error) {
-      console.error('Error updating token balances:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const importToken = async () => {
-    if (!newTokenAddress || !aaAddress) return;
-    
-    if (!isAddress(newTokenAddress)) {
-      setImportError('Invalid address format');
-      return;
-    }
-
-    setImporting(true);
-    setImportError('');
-
-    try {
-      if (tokens.some(t => t.address.toLowerCase() === newTokenAddress.toLowerCase())) {
-        setImportError('Token already imported');
-        setImporting(false);
-        return;
-      }
-
-      const [name, symbol, balance] = await Promise.all([
-        publicClient.readContract({
-          address: newTokenAddress as `0x${string}`,
-          abi: erc20Abi,
-          functionName: 'name'
-        }),
-        publicClient.readContract({
-          address: newTokenAddress as `0x${string}`,
-          abi: erc20Abi,
-          functionName: 'symbol'
-        }),
-        publicClient.readContract({
-          address: newTokenAddress as `0x${string}`,
-          abi: erc20Abi,
-          functionName: 'balanceOf',
-          args: [aaAddress]
-        })
-      ]);
-
-      const newToken = {
-        address: newTokenAddress,
-        name: name as string,
-        symbol: symbol as string,
-        balance: formatEther(balance as bigint)
-      };
-
-      const updatedTokens = [...tokens, newToken];
-      setTokens(updatedTokens);
-      localStorage.setItem(`imported_tokens_${aaAddress}`, JSON.stringify(updatedTokens));
-      
+    const success = await importToken(newTokenAddress);
+    if (success) {
       setNewTokenAddress('');
-      toast.success(`Imported ${name} (${symbol}) successfully`);
-    } catch (error) {
-      console.error('Error importing token:', error);
-      setImportError('Invalid token address or not an ERC-20 token');
-    } finally {
-      setImporting(false);
     }
-  };
-
-  const removeToken = (address: string) => {
-    const updatedTokens = tokens.filter(token => token.address.toLowerCase() !== address.toLowerCase());
-    setTokens(updatedTokens);
-    localStorage.setItem(`imported_tokens_${aaAddress}`, JSON.stringify(updatedTokens));
-    
-    if (selectedToken === address) {
-      setSelectedToken(null);
-      setRecipient('');
-      setAmount('');
-    }
-    
-    toast.success('Token removed');
   };
 
   const handleSendToken = async () => {
@@ -204,7 +61,7 @@ export const TokenList: React.FC<TokenListProps> = ({
     try {
       await sendToken(selectedToken, recipient, amount);
       
-      const selectedTokenInfo = tokens.find(t => t.address === selectedToken);
+      const selectedTokenInfo = tokens.find((t: TokenInfo) => t.address === selectedToken);
       
       setTxStatus({
         status: 'success',
@@ -245,15 +102,15 @@ export const TokenList: React.FC<TokenListProps> = ({
   };
 
   const filteredTokens = searchTerm
-    ? tokens.filter(token => 
+    ? tokens.filter((token: TokenInfo) => 
         token.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         token.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
         token.address.toLowerCase().includes(searchTerm.toLowerCase())
       )
     : tokens;
 
-  const getSelectedTokenInfo = () => {
-    return tokens.find(token => token.address === selectedToken);
+  const getSelectedTokenInfo = (): TokenInfo | undefined => {
+    return tokens.find((token: TokenInfo) => token.address === selectedToken);
   };
 
   const getSelectedTokenBalance = () => {
@@ -324,7 +181,7 @@ export const TokenList: React.FC<TokenListProps> = ({
                   disabled={importing}
                 />
                 <Button
-                  onClick={importToken}
+                  onClick={handleImportToken}
                   disabled={importing || !newTokenAddress}
                   size="sm"
                   className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8"
@@ -346,7 +203,6 @@ export const TokenList: React.FC<TokenListProps> = ({
           </div>
         </div>
 
-        {/* トークン送金フォーム (選択されたトークンがある場合のみ表示) */}
         {selectedToken && (
           <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mt-4">
             <div className="flex items-center gap-2 mb-4">
@@ -503,7 +359,7 @@ export const TokenList: React.FC<TokenListProps> = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredTokens.map((token) => {
+                {filteredTokens.map((token: TokenInfo) => {
                   const isSelected = selectedToken === token.address;
                   const formattedBalance = parseFloat(token.balance).toFixed(4);
                   
