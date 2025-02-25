@@ -60,7 +60,6 @@ export const useTokenContract = (
     }
   }
 
-  // ユーザーのトークン一覧を取得する関数
   const getUserTokens = async (): Promise<void> => {
     if (!aaAddress || isLoading) return
 

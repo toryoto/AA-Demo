@@ -2,14 +2,14 @@ import React, { useEffect, useCallback, useState } from 'react';
 import { 
   Coins, 
   ArrowUpRight, 
+  Send, 
   Loader2, 
   Plus, 
   Trash2, 
   RefreshCw,
   Search,
   CheckCircle2,
-  AlertCircle,
-  Send
+  AlertCircle
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
@@ -19,9 +19,9 @@ import { Label } from './ui/label';
 import { Alert, AlertDescription } from './ui/alert';
 import { Badge } from './ui/badge';
 import { formatEther, Hex, PublicClient, isAddress } from 'viem';
-import { useTokenContract } from '../hooks/useTokenContract';
-import { useImportedTokens } from '../hooks/useImportedToken';
+import { erc20Abi } from '../abi/erc20';
 import { toast } from 'sonner';
+import { useTokenContract } from '../hooks/useTokenContract';
 
 interface TokenListProps {
   aaAddress: Hex;
@@ -29,73 +29,103 @@ interface TokenListProps {
   isDeployed: boolean;
 }
 
+interface TokenInfo {
+  address: string;
+  name: string;
+  symbol: string;
+  balance: string;
+}
+
 export const TokenList: React.FC<TokenListProps> = ({ 
   aaAddress,
   publicClient,
+  isDeployed
 }) => {
-  const {
-    tokens,
-    balances,
-    isLoading,
-    getUserTokens,
-    sendToken
-  } = useTokenContract(publicClient, aaAddress);
-
-  const {
-    importedTokens,
-    importToken,
-    removeToken
-  } = useImportedTokens(publicClient, aaAddress);
-
+  const [tokens, setTokens] = useState<TokenInfo[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [newTokenAddress, setNewTokenAddress] = useState('');
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // トークン送金用の状態
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [sending, setSending] = useState(false);
   const [txStatus, setTxStatus] = useState<{status: 'success' | 'error', message: string} | null>(null);
 
+  const { sendToken } = useTokenContract(publicClient, aaAddress);
+
   useEffect(() => {
     if (aaAddress && aaAddress !== '0x') {
-      getUserTokens();
+      loadTokens();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aaAddress]);
 
-  // 作成したトークンとインポートしたトークンを結合
-  const allTokens = React.useMemo(() => {
-    const createdTokenAddresses = new Set(tokens.map(t => t.tokenAddress.toLowerCase()));
+  useEffect(() => {
+    if (tokens.length > 0 && aaAddress && aaAddress !== '0x') {
+      updateTokenBalances();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokens.length, aaAddress]);
+
+  const loadTokens = () => {
+    if (!aaAddress) return;
     
-    const importedTokenInfos = importedTokens
-      .filter(t => !createdTokenAddresses.has(t.address.toLowerCase()))
-      .map(t => ({
-        tokenAddress: t.address,
-        name: t.name,
-        symbol: t.symbol,
-        initialSupply: BigInt(0),
-        timestamp: BigInt(0)
-      }));
+    const storedTokens = localStorage.getItem(`imported_tokens_${aaAddress}`);
+    if (storedTokens) {
+      try {
+        setTokens(JSON.parse(storedTokens));
+      } catch (error) {
+        console.error('Error parsing stored tokens:', error);
+        setTokens([]);
+      }
+    }
+  };
 
-    return [...tokens, ...importedTokenInfos];
-  }, [tokens, importedTokens]);
-
-  // 検索フィルター
-  const filteredTokens = React.useMemo(() => {
-    if (!searchTerm) return allTokens;
+  const updateTokenBalances = async () => {
+    if (!aaAddress || tokens.length === 0) return;
     
-    const term = searchTerm.toLowerCase();
-    return allTokens.filter(token => 
-      token.name.toLowerCase().includes(term) ||
-      token.symbol.toLowerCase().includes(term) ||
-      token.tokenAddress.toLowerCase().includes(term)
-    );
-  }, [allTokens, searchTerm]);
+    setIsLoading(true);
+    
+    try {
+      const updatedTokens = await Promise.all(
+        tokens.map(async (token) => {
+          try {
+            const balance = await publicClient.readContract({
+              address: token.address as `0x${string}`,
+              abi: erc20Abi,
+              functionName: 'balanceOf',
+              args: [aaAddress]
+            });
+            
+            return {
+              ...token,
+              balance: formatEther(balance as bigint)
+            };
+          } catch (error) {
+            console.error(`Error fetching balance for token ${token.address}:`, error);
+            return {
+              ...token,
+              balance: '0'
+            };
+          }
+        })
+      );
+      
+      setTokens(updatedTokens);
+      localStorage.setItem(`imported_tokens_${aaAddress}`, JSON.stringify(updatedTokens));
+    } catch (error) {
+      console.error('Error updating token balances:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const handleImport = async () => {
+  const importToken = async () => {
+    if (!newTokenAddress || !aaAddress) return;
+    
     if (!isAddress(newTokenAddress)) {
       setImportError('Invalid address format');
       return;
@@ -105,37 +135,65 @@ export const TokenList: React.FC<TokenListProps> = ({
     setImportError('');
 
     try {
-      const success = await importToken(newTokenAddress);
-      if (success) {
-        setNewTokenAddress('');
-        toast.success('Token imported successfully');
-      } else {
-        setImportError('Token already imported or invalid token contract');
+      if (tokens.some(t => t.address.toLowerCase() === newTokenAddress.toLowerCase())) {
+        setImportError('Token already imported');
+        setImporting(false);
+        return;
       }
+
+      const [name, symbol, balance] = await Promise.all([
+        publicClient.readContract({
+          address: newTokenAddress as `0x${string}`,
+          abi: erc20Abi,
+          functionName: 'name'
+        }),
+        publicClient.readContract({
+          address: newTokenAddress as `0x${string}`,
+          abi: erc20Abi,
+          functionName: 'symbol'
+        }),
+        publicClient.readContract({
+          address: newTokenAddress as `0x${string}`,
+          abi: erc20Abi,
+          functionName: 'balanceOf',
+          args: [aaAddress]
+        })
+      ]);
+
+      const newToken = {
+        address: newTokenAddress,
+        name: name as string,
+        symbol: symbol as string,
+        balance: formatEther(balance as bigint)
+      };
+
+      const updatedTokens = [...tokens, newToken];
+      setTokens(updatedTokens);
+      localStorage.setItem(`imported_tokens_${aaAddress}`, JSON.stringify(updatedTokens));
+      
+      setNewTokenAddress('');
+      toast.success(`Imported ${name} (${symbol}) successfully`);
     } catch (error) {
-      console.error(error);
-      setImportError('Failed to import token');
+      console.error('Error importing token:', error);
+      setImportError('Invalid token address or not an ERC-20 token');
     } finally {
       setImporting(false);
     }
   };
 
-  const shortenAddress = useCallback((address: string) => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
-  }, []);
-
-  const formatTimestamp = useCallback((timestamp: bigint) => {
-    if (timestamp === BigInt(0)) return '-';
+  const removeToken = (address: string) => {
+    const updatedTokens = tokens.filter(token => token.address.toLowerCase() !== address.toLowerCase());
+    setTokens(updatedTokens);
+    localStorage.setItem(`imported_tokens_${aaAddress}`, JSON.stringify(updatedTokens));
     
-    const date = new Date(Number(timestamp) * 1000);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  }, []);
+    if (selectedToken === address) {
+      setSelectedToken(null);
+      setRecipient('');
+      setAmount('');
+    }
+    
+    toast.success('Token removed');
+  };
 
   const handleSendToken = async () => {
     if (!selectedToken || !recipient || !amount) return;
@@ -144,20 +202,16 @@ export const TokenList: React.FC<TokenListProps> = ({
     setTxStatus(null);
     
     try {
-      await sendToken(
-        selectedToken,
-        recipient,
-        amount
-      );
+      await sendToken(selectedToken, recipient, amount);
       
-      const selectedTokenInfo = allTokens.find(t => t.tokenAddress === selectedToken);
+      const selectedTokenInfo = tokens.find(t => t.address === selectedToken);
       
       setTxStatus({
         status: 'success',
         message: `Successfully sent ${amount} ${selectedTokenInfo?.symbol || ''} to ${shortenAddress(recipient)}`
       });
       
-      await getUserTokens();
+      await updateTokenBalances();
       
       setTimeout(() => {
         resetForm();
@@ -174,22 +228,12 @@ export const TokenList: React.FC<TokenListProps> = ({
     }
   };
 
-  const getSelectedTokenSymbol = () => {
-    if (!selectedToken) return '';
-    const token = allTokens.find(t => t.tokenAddress === selectedToken);
-    return token?.symbol || '';
-  };
+  const shortenAddress = useCallback((address: string) => {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  }, []);
 
-  const getSelectedTokenBalance = () => {
-    if (!selectedToken) return '0';
-    const balance = balances.find(b => 
-      b.address.toLowerCase() === selectedToken.toLowerCase()
-    )?.balance;
-    return balance ? formatEther(balance) : '0';
-  };
-
-  const selectToken = (tokenAddress: string) => {
-    setSelectedToken(tokenAddress);
+  const selectToken = (address: string) => {
+    setSelectedToken(address);
     setTxStatus(null);
   };
 
@@ -200,12 +244,31 @@ export const TokenList: React.FC<TokenListProps> = ({
     setTxStatus(null);
   };
 
+  const filteredTokens = searchTerm
+    ? tokens.filter(token => 
+        token.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        token.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        token.address.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : tokens;
+
+  const getSelectedTokenInfo = () => {
+    return tokens.find(token => token.address === selectedToken);
+  };
+
+  const getSelectedTokenBalance = () => {
+    const token = getSelectedTokenInfo();
+    return token ? token.balance : '0';
+  };
+
   const isValid = 
     selectedToken !== null && 
     recipient.length > 3 && 
     amount && 
     parseFloat(amount) > 0 &&
     parseFloat(amount) <= parseFloat(getSelectedTokenBalance());
+
+  if (!isDeployed) return null;
 
   return (
     <Card className="border-slate-200 shadow-sm overflow-hidden">
@@ -216,11 +279,11 @@ export const TokenList: React.FC<TokenListProps> = ({
             <CardTitle className="text-lg font-bold">Your Tokens</CardTitle>
           </div>
           <Badge className="bg-slate-100 text-slate-800 hover:bg-slate-200">
-            {allTokens.length} Token{allTokens.length !== 1 ? 's' : ''}
+            {tokens.length} Token{tokens.length !== 1 ? 's' : ''}
           </Badge>
         </div>
         <CardDescription className="text-sm text-slate-500 mt-1">
-          Manage and transfer your ERC-20 tokens
+          Import and manage your ERC-20 tokens
         </CardDescription>
       </CardHeader>
       
@@ -240,11 +303,12 @@ export const TokenList: React.FC<TokenListProps> = ({
             <Button
               variant="outline"
               size="sm"
-              onClick={getUserTokens}
+              onClick={updateTokenBalances}
               className="whitespace-nowrap"
+              disabled={isLoading}
             >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
+              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              {isLoading ? 'Updating...' : 'Refresh'}
             </Button>
             
             <div className="flex-1 md:w-auto">
@@ -260,7 +324,7 @@ export const TokenList: React.FC<TokenListProps> = ({
                   disabled={importing}
                 />
                 <Button
-                  onClick={handleImport}
+                  onClick={importToken}
                   disabled={importing || !newTokenAddress}
                   size="sm"
                   className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8"
@@ -282,13 +346,14 @@ export const TokenList: React.FC<TokenListProps> = ({
           </div>
         </div>
 
+        {/* トークン送金フォーム (選択されたトークンがある場合のみ表示) */}
         {selectedToken && (
           <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mt-4">
             <div className="flex items-center gap-2 mb-4">
               <Send className="h-5 w-5 text-primary" />
-              <h3 className="text-lg font-medium">Send {getSelectedTokenSymbol()}</h3>
+              <h3 className="text-lg font-medium">Send {getSelectedTokenInfo()?.symbol}</h3>
               <Badge className="ml-auto">
-                Balance: {parseFloat(getSelectedTokenBalance()).toFixed(4)} {getSelectedTokenSymbol()}
+                Balance: {parseFloat(getSelectedTokenBalance()).toFixed(4)} {getSelectedTokenInfo()?.symbol}
               </Badge>
             </div>
             
@@ -333,7 +398,7 @@ export const TokenList: React.FC<TokenListProps> = ({
                   />
                   <div className="absolute inset-y-0 right-3 flex items-center">
                     <span className="text-sm text-slate-500 font-medium">
-                      {getSelectedTokenSymbol()}
+                      {getSelectedTokenInfo()?.symbol}
                     </span>
                   </div>
                 </div>
@@ -385,15 +450,13 @@ export const TokenList: React.FC<TokenListProps> = ({
               >
                 {sending ? (
                   <>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    </div>
-                    <span className="opacity-0">Send</span>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Sending...
                   </>
                 ) : (
                   <>
                     <Send className="h-4 w-4 mr-2" />
-                    Send {getSelectedTokenSymbol()}
+                    Send {getSelectedTokenInfo()?.symbol}
                   </>
                 )}
               </Button>
@@ -401,7 +464,7 @@ export const TokenList: React.FC<TokenListProps> = ({
           </div>
         )}
 
-        {isLoading ? (
+        {isLoading && tokens.length === 0 ? (
           <div className="flex justify-center items-center p-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
@@ -416,7 +479,7 @@ export const TokenList: React.FC<TokenListProps> = ({
             <p className="text-slate-500 mb-4">
               {searchTerm 
                 ? 'Try a different search term or clear the search' 
-                : 'Import existing tokens or create a new one'}
+                : 'Import existing tokens to get started'}
             </p>
             {searchTerm && (
               <Button 
@@ -433,91 +496,79 @@ export const TokenList: React.FC<TokenListProps> = ({
             <Table>
               <TableHeader>
                 <TableRow className="bg-slate-50">
-                  <TableHead className="w-1/5">Name</TableHead>
-                  <TableHead className="w-1/6">Symbol</TableHead>
+                  <TableHead className="w-1/3">Token</TableHead>
                   <TableHead className="w-1/6">Balance</TableHead>
-                  <TableHead className="w-1/5">Contract</TableHead>
-                  <TableHead className="w-1/6">Created</TableHead>
-                  <TableHead className="w-1/5 text-right">Actions</TableHead>
+                  <TableHead className="w-1/4">Contract</TableHead>
+                  <TableHead className="w-1/4 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredTokens.map((token) => {
-                  const isImported = importedTokens.some(
-                    t => t.address.toLowerCase() === token.tokenAddress.toLowerCase()
-                  );
-                  
-                  const tokenBalance = balances.find(b => 
-                    b.address.toLowerCase() === token.tokenAddress.toLowerCase()
-                  )?.balance || BigInt(0);
-                  
-                  const formattedBalance = formatEther(tokenBalance);
-                  const isSelected = selectedToken === token.tokenAddress;
+                  const isSelected = selectedToken === token.address;
+                  const formattedBalance = parseFloat(token.balance).toFixed(4);
                   
                   return (
                     <TableRow 
-                      key={token.tokenAddress} 
-                      className={`hover:bg-slate-50 group ${isSelected ? 'bg-blue-50 hover:bg-blue-50' : ''}`}
+                      key={token.address} 
+                      className={`hover:bg-slate-50 ${isSelected ? 'bg-blue-50 hover:bg-blue-50' : ''}`}
                     >
-                      <TableCell className="font-medium">
-                        {token.name}
-                        {isSelected && <Badge className="ml-2 bg-blue-100 text-blue-800 border-blue-200">Selected</Badge>}
-                      </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="bg-slate-50 font-mono">
-                          {token.symbol}
-                        </Badge>
+                        <div className="flex items-center">
+                          <div className="bg-slate-100 p-2 rounded-full mr-3">
+                            <Coins className="h-5 w-5 text-slate-600" />
+                          </div>
+                          <div>
+                            <div className="font-medium flex items-center">
+                              {token.name}
+                              {isSelected && <Badge className="ml-2 bg-blue-100 text-blue-800 border-blue-200">Selected</Badge>}
+                            </div>
+                            <div className="text-sm text-slate-500">
+                              <Badge variant="outline" className="bg-slate-50 font-mono">
+                                {token.symbol}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="font-medium">
-                          {parseFloat(formattedBalance).toFixed(4)}
+                          {formattedBalance}
                         </div>
                       </TableCell>
                       <TableCell>
                         <a
-                          href={`https://sepolia.etherscan.io/address/${token.tokenAddress}`}
+                          href={`https://sepolia.etherscan.io/address/${token.address}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-1 text-primary hover:text-primary/80 font-mono text-xs"
                         >
-                          {shortenAddress(token.tokenAddress)}
+                          {shortenAddress(token.address)}
                           <ArrowUpRight className="h-3 w-3" />
                         </a>
                       </TableCell>
-                      <TableCell>
-                        {token.timestamp > 0 ? (
-                          <div className="text-sm text-slate-600">{formatTimestamp(token.timestamp)}</div>
-                        ) : (
-                          <Badge variant="outline" className="bg-slate-50 text-slate-500">Imported</Badge>
-                        )}
-                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end items-center gap-2">
-                          {parseFloat(formattedBalance) > 0 && (
-                            <Button
-                              variant={isSelected ? "secondary" : "ghost"}
-                              size="sm"
-                              className={`${isSelected 
-                                ? "bg-blue-200 text-blue-800 hover:bg-blue-300" 
-                                : "text-primary hover:text-primary/80 hover:bg-primary/10"} h-8`}
-                              onClick={() => selectToken(token.tokenAddress)}
-                            >
-                              <Send className="h-3 w-3 mr-1" />
-                              {isSelected ? "Selected" : "Send"}
-                            </Button>
-                          )}
+                          <Button
+                            variant={isSelected ? "secondary" : "ghost"}
+                            size="sm"
+                            className={`${isSelected 
+                              ? "bg-blue-200 text-blue-800 hover:bg-blue-300" 
+                              : "text-primary hover:text-primary/80 hover:bg-primary/10"} h-8`}
+                            onClick={() => selectToken(token.address)}
+                          >
+                            <Send className="h-3 w-3 mr-1" />
+                            {isSelected ? "Selected" : "Send"}
+                          </Button>
                           
-                          {isImported && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8"
-                              onClick={() => removeToken(token.tokenAddress)}
-                            >
-                              <Trash2 className="h-3 w-3 mr-1" />
-                              Remove
-                            </Button>
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8"
+                            onClick={() => removeToken(token.address)}
+                          >
+                            <Trash2 className="h-3 w-3 mr-1" />
+                            Remove
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
