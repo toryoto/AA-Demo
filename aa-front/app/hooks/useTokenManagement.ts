@@ -26,12 +26,14 @@ export const useTokenManagement = (publicClient: PublicClient, aaAddress: Hex) =
     if (aaAddress && aaAddress !== '0x') {
       loadTokens();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aaAddress]);
 
   useEffect(() => {
     if (tokens.length > 0 && aaAddress && aaAddress !== '0x') {
       updateTokenBalances();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokens.length, aaAddress]);
 
   const loadTokens = () => {
