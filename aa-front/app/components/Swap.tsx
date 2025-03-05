@@ -32,13 +32,11 @@ import { Slider } from './ui/slider';
 import { useAA } from '../hooks/useAA';
 import { useFetchAABalance } from '../hooks/useFetchAABalance';
 import { 
-  DAI_ADDRESS, 
-  USDC_ADDRESS, 
-  JPYC_ADDRESS, 
   WRAPPED_SEPOLIA_ADDRESS 
 } from '../constants/addresses';
 import Image from 'next/image';
 import { TOKEN_OPTIONS } from '../constants/tokenList';
+import { useSwap } from '../hooks/useSwap'; // Import the custom hook
 
 interface SwapProps {
   isDeployed: boolean;
@@ -143,6 +141,17 @@ const TokenSelector = ({
 export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
   const { aaAddress } = useAA();
   const { balance: ethBalance, fetchBalance } = useFetchAABalance(aaAddress);
+  
+  // Initialize the useSwap hook
+  const { 
+    swap, 
+    getSwapEstimate, 
+    isSupportedPair, 
+    approveToken, 
+    getTokenBalance, 
+    getAllowance,
+    getTokenSymbol
+  } = useSwap(aaAddress);
 
   const [fromToken, setFromToken] = useState<string>('ETH');
   const [toToken, setToToken] = useState<string>('');
@@ -156,61 +165,148 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
     message: ''
   });
   const [priceImpact, setPriceImpact] = useState<string>('0.00');
+  const [pairSupported, setPairSupported] = useState<boolean>(false);
+  const [tokenApproved, setTokenApproved] = useState<boolean>(false);
+  const [isCheckingPair, setIsCheckingPair] = useState<boolean>(false);
+  // Add states to store token balances to prevent infinite loops
+  const [fromTokenBalance, setFromTokenBalance] = useState<string>('0');
+  const [toTokenBalance, setToTokenBalance] = useState<string>('0');
   
-  // Reset state when tokens are changed
+  // Fetch token balances when tokens change
   useEffect(() => {
-    setFromAmount('');
-    setToAmount('');
-    setSwapStatus({ status: null, message: '' });
+    const updateTokenBalances = async () => {
+      if (fromToken) {
+        if (fromToken === 'ETH') {
+          setFromTokenBalance(ethBalance);
+        } else {
+          try {
+            const balance = await getTokenBalance(fromToken);
+            setFromTokenBalance(balance);
+          } catch (error) {
+            console.error("Error fetching from token balance:", error);
+            setFromTokenBalance('0');
+          }
+        }
+      }
+      
+      if (toToken) {
+        if (toToken === 'ETH') {
+          setToTokenBalance(ethBalance);
+        } else {
+          try {
+            const balance = await getTokenBalance(toToken);
+            setToTokenBalance(balance);
+          } catch (error) {
+            console.error("Error fetching to token balance:", error);
+            setToTokenBalance('0');
+          }
+        }
+      }
+    };
     
-    // Simulate price quote
+    updateTokenBalances();
+  }, [fromToken, toToken, ethBalance]);
+
+  // Check if pair is supported when tokens change
+  useEffect(() => {
+    const checkPairSupport = async () => {
+      if (fromToken && toToken && fromToken !== toToken) {
+        setIsCheckingPair(true);
+        setFromAmount('');
+        setToAmount('');
+        setSwapStatus({ status: null, message: '' });
+        setPairSupported(false);
+        
+        try {
+          // Handle ETH by using Wrapped ETH address
+          const fromTokenAddress = fromToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
+          const toTokenAddress = toToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
+          
+          // Check if pair is supported (only WSEP and DAI have liquidity)
+          const supported = await isSupportedPair(fromTokenAddress, toTokenAddress);
+          setPairSupported(supported);
+          
+          // If not supported, show an alert
+          if (!supported) {
+            setSwapStatus({
+              status: 'error',
+              message: 'This token pair does not have a liquidity pool available.'
+            });
+          } else {
+            // Set a random price impact between 0.1% and 2% for supported pairs
+            const impact = (0.1 + Math.random() * 1.9).toFixed(2);
+            setPriceImpact(impact);
+          }
+        } catch (error) {
+          console.error("Error checking pair support:", error);
+          setPairSupported(false);
+          setSwapStatus({
+            status: 'error',
+            message: 'Error checking pair support. Please try again.'
+          });
+        } finally {
+          setIsCheckingPair(false);
+        }
+      }
+    };
+    
     if (fromToken && toToken && fromToken !== toToken) {
-      setPriceImpact((Math.random() * 1.5).toFixed(2));
+      checkPairSupport();
     }
   }, [fromToken, toToken]);
 
-  // Simulate price calculation when fromAmount changes
+  // Check token approval when from token and amount change
   useEffect(() => {
-    if (fromAmount && fromToken && toToken && fromToken !== toToken) {
-      // Simple simulation - in real implementation, this would call a price oracle
-      const delay = setTimeout(() => {
-        let rate: number;
-        
-        // Different rate based on token pairs
-        if (fromToken === 'ETH' && toToken === DAI_ADDRESS) {
-          rate = 3000 + Math.random() * 100;
-        } else if (fromToken === 'ETH' && toToken === USDC_ADDRESS) {
-          rate = 3000 + Math.random() * 100;
-        } else if (fromToken === 'ETH' && toToken === JPYC_ADDRESS) {
-          rate = 450000 + Math.random() * 5000;
-        } else if (fromToken === 'ETH' && toToken === WRAPPED_SEPOLIA_ADDRESS) {
-          rate = 1; // 1:1 peg
-        } else if (fromToken === WRAPPED_SEPOLIA_ADDRESS && toToken === 'ETH') {
-          rate = 1; // 1:1 peg
-        } else if (fromToken === DAI_ADDRESS && toToken === USDC_ADDRESS) {
-          rate = 0.99 + Math.random() * 0.02; // Slightly fluctuating around 1
-        } else if (fromToken === USDC_ADDRESS && toToken === DAI_ADDRESS) {
-          rate = 0.99 + Math.random() * 0.02; // Slightly fluctuating around 1
-        } else if (fromToken === JPYC_ADDRESS && toToken === USDC_ADDRESS) {
-          rate = 0.0066 + Math.random() * 0.0002;
-        } else {
-          rate = 1 + Math.random(); // Generic rate for other pairs
+    const checkTokenApproval = async () => {
+      if (fromToken && fromToken !== 'ETH' && fromAmount && parseFloat(fromAmount) > 0) {
+        try {
+          const allowance = await getAllowance(fromToken);
+          setTokenApproved(parseFloat(allowance) >= parseFloat(fromAmount));
+        } catch (error) {
+          console.error("Error checking token approval:", error);
+          setTokenApproved(false);
         }
-        
-        const calculatedAmount = parseFloat(fromAmount) * rate;
-        setToAmount(calculatedAmount.toFixed(6));
-        
-        // Set a random price impact between 0.1% and 2%
-        const impact = (0.1 + Math.random() * 1.9).toFixed(2);
-        setPriceImpact(impact);
-      }, 300);
+      } else if (fromToken === 'ETH') {
+        // ETH doesn't need approval
+        setTokenApproved(true);
+      }
+    };
+    
+    if (fromToken && fromAmount && parseFloat(fromAmount) > 0) {
+      checkTokenApproval();
+    }
+  }, [fromToken, fromAmount]);
+
+  // Get swap estimate when fromAmount changes
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    
+    if (fromAmount && parseFloat(fromAmount) > 0 && fromToken && toToken && fromToken !== toToken && pairSupported) {
+      const getEstimate = async () => {
+        try {
+          // Handle ETH by using Wrapped ETH address
+          const fromTokenAddress = fromToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
+          const toTokenAddress = toToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
+          
+          const estimate = await getSwapEstimate(fromTokenAddress, toTokenAddress, fromAmount);
+          setToAmount(estimate);
+        } catch (error) {
+          console.error("Error getting swap estimate:", error);
+          setToAmount('0');
+        }
+      };
       
-      return () => clearTimeout(delay);
+      timeoutId = setTimeout(() => {
+        getEstimate();
+      }, 300);
     } else {
       setToAmount('');
-      setPriceImpact('0.00');
     }
-  }, [fromAmount, fromToken, toToken]);
+    
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [fromAmount, fromToken, toToken, pairSupported]);
 
   const switchTokens = () => {
     // Don't switch if one of the tokens is not selected
@@ -223,25 +319,43 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
   };
 
   const handleSwap = async () => {
-    if (!fromToken || !toToken || !fromAmount || parseFloat(fromAmount) <= 0) return;
+    if (!fromToken || !toToken || !fromAmount || parseFloat(fromAmount) <= 0 || !pairSupported) return;
     
     setSwapping(true);
     setSwapStatus({ status: null, message: '' });
     
     try {
-      // Simulate swap transaction
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Handle ETH by using Wrapped ETH address
+      const fromTokenAddress = fromToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
+      const toTokenAddress = toToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
       
-      // 80% chance of success for demo purposes
-      const isSuccess = Math.random() > 0.2;
+      // Approve token if necessary (only for non-ETH tokens)
+      if (fromToken !== 'ETH' && !tokenApproved) {
+        const approvalResult = await approveToken(fromTokenAddress, fromAmount);
+        
+        if (!approvalResult.success) {
+          throw new Error(`Failed to approve token: ${approvalResult.error}`);
+        }
+        
+        setTokenApproved(true);
+      }
       
-      if (isSuccess) {
-        const fromTokenInfo = TOKEN_OPTIONS.find(t => t.address === fromToken);
-        const toTokenInfo = TOKEN_OPTIONS.find(t => t.address === toToken);
+      // Execute swap
+      const swapResult = await swap({
+        fromToken: fromTokenAddress,
+        toToken: toTokenAddress,
+        amount: fromAmount,
+        slippage: slippage,
+        deadline: 600 // 10 minutes deadline
+      });
+      
+      if (swapResult.success) {
+        const fromTokenSymbol = fromToken === 'ETH' ? 'ETH' : await getTokenSymbol(fromTokenAddress);
+        const toTokenSymbol = toToken === 'ETH' ? 'ETH' : await getTokenSymbol(toTokenAddress);
         
         setSwapStatus({
           status: 'success',
-          message: `Successfully swapped ${fromAmount} ${fromTokenInfo?.symbol} for ${toAmount} ${toTokenInfo?.symbol}`
+          message: `Successfully swapped ${fromAmount} ${fromTokenSymbol} for ${toAmount} ${toTokenSymbol}`
         });
         
         // Reset form after successful swap
@@ -252,7 +366,7 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
         fetchBalance();
         if (onSwapComplete) onSwapComplete();
       } else {
-        throw new Error('Swap failed: Insufficient liquidity');
+        throw new Error(swapResult.error || 'Swap failed');
       }
     } catch (error) {
       setSwapStatus({
@@ -264,38 +378,19 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
     }
   };
 
-  const getTokenBalance = (tokenAddress: string): string => {
-    if (tokenAddress === 'ETH') return ethBalance;
-    
-    // In a real app, you would fetch these balances from the blockchain
-    // For demo purposes, return simulated balances
-    switch (tokenAddress) {
-      case WRAPPED_SEPOLIA_ADDRESS:
-        return '0.5';
-      case DAI_ADDRESS:
-        return '1500.00';
-      case USDC_ADDRESS:
-        return '1000.00';
-      case JPYC_ADDRESS:
-        return '15000.00';
-      default:
-        return '0';
-    }
-  };
-
   const handleMaxButtonClick = () => {
-    const maxAmount = getTokenBalance(fromToken);
-    // Leave some ETH for gas if ETH is selected
+    // Handle ETH differently to leave some for gas
     if (fromToken === 'ETH') {
-      const ethBalance = parseFloat(maxAmount);
-      const maxEth = Math.max(0, ethBalance - 0.01);
+      const maxEth = Math.max(0, parseFloat(fromTokenBalance) - 0.01);
       setFromAmount(maxEth.toFixed(6));
     } else {
-      setFromAmount(maxAmount);
+      setFromAmount(fromTokenBalance);
     }
   };
 
-  const getTokenSymbol = (tokenAddress: string): string => {
+  const getTokenSymbolLocal = (tokenAddress: string): string => {
+    if (tokenAddress === 'ETH') return 'ETH';
+    
     const token = TOKEN_OPTIONS.find(t => t.address === tokenAddress);
     return token ? token.symbol : tokenAddress.slice(0, 6) + '...' + tokenAddress.slice(-4);
   };
@@ -303,10 +398,9 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
   const isValidSwap = () => {
     if (!fromToken || !toToken || fromToken === toToken) return false;
     if (!fromAmount || parseFloat(fromAmount) <= 0) return false;
+    if (!pairSupported) return false;
     
-    // Check if user has enough balance
-    const balance = getTokenBalance(fromToken);
-    return parseFloat(fromAmount) <= parseFloat(balance);
+    return true;
   };
 
   if (!isDeployed) return null;
@@ -389,7 +483,7 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
           <div className="flex justify-between items-center">
             <Label className="text-sm font-medium">From</Label>
             <div className="text-xs text-slate-500">
-              Balance: {parseFloat(getTokenBalance(fromToken)).toFixed(6)} {getTokenSymbol(fromToken)}
+              Balance: {fromToken === 'ETH' ? parseFloat(ethBalance).toFixed(6) : parseFloat(fromTokenBalance).toFixed(6)} {getTokenSymbolLocal(fromToken)}
             </div>
           </div>
           
@@ -447,7 +541,7 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
           <div className="flex justify-between items-center">
             <Label className="text-sm font-medium">To</Label>
             <div className="text-xs text-slate-500">
-              Balance: {parseFloat(getTokenBalance(toToken || '')).toFixed(6)} {getTokenSymbol(toToken || '')}
+              Balance: <span className="balance-placeholder">0.00</span> {getTokenSymbolLocal(toToken || '')}
             </div>
           </div>
           
@@ -480,12 +574,12 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
         </div>
 
         {/* Swap Information */}
-        {fromToken && toToken && fromToken !== toToken && fromAmount && toAmount && (
+        {fromToken && toToken && fromToken !== toToken && fromAmount && toAmount && pairSupported && (
           <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 text-sm">
             <div className="flex justify-between items-center mb-1">
               <span className="text-slate-600">Rate</span>
               <span className="font-medium">
-                1 {getTokenSymbol(fromToken)} = {(parseFloat(toAmount) / parseFloat(fromAmount)).toFixed(6)} {getTokenSymbol(toToken)}
+                1 {getTokenSymbolLocal(fromToken)} = {(parseFloat(toAmount) / parseFloat(fromAmount)).toFixed(6)} {getTokenSymbolLocal(toToken)}
               </span>
             </div>
             <div className="flex justify-between items-center">
@@ -514,7 +608,7 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
         <Button
           className="w-full relative"
           size="lg"
-          disabled={!isValidSwap() || swapping}
+          disabled={!isValidSwap() || swapping || isCheckingPair}
           onClick={handleSwap}
         >
           {swapping ? (
@@ -522,16 +616,23 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>Swapping...</span>
             </div>
+          ) : isCheckingPair ? (
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Checking pair...</span>
+            </div>
           ) : !fromToken || !toToken ? (
             "Select tokens"
           ) : fromToken === toToken ? (
             "Select different tokens"
+          ) : !pairSupported ? (
+            "No liquidity for this pair"
           ) : !fromAmount || parseFloat(fromAmount) <= 0 ? (
             "Enter an amount"
-          ) : parseFloat(fromAmount) > parseFloat(getTokenBalance(fromToken)) ? (
-            "Insufficient balance"
+          ) : fromToken !== 'ETH' && !tokenApproved ? (
+            `Approve ${getTokenSymbolLocal(fromToken)} first`
           ) : (
-            `Swap ${getTokenSymbol(fromToken)} for ${getTokenSymbol(toToken)}`
+            `Swap ${getTokenSymbolLocal(fromToken)} for ${getTokenSymbolLocal(toToken)}`
           )}
         </Button>
       </CardFooter>

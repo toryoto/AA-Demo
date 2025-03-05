@@ -10,9 +10,9 @@ export interface TokenOption {
 
 export const TOKEN_OPTIONS: TokenOption[] = [
   { 
-    symbol: 'ETH', 
-    name: 'Ethereum', 
-    address: 'ETH', 
+    symbol: 'SEP', 
+    name: 'Sepolia ETH', 
+    address: 'SEP', 
     logo: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/eth.png' 
   },
   { 
