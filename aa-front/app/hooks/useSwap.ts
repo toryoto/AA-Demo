@@ -2,7 +2,7 @@ import { encodeFunctionData, Hex, parseEther, formatEther } from "viem"
 import { SimpleAccountABI } from "../abi/simpleAccount"
 import { publicClient } from "../utils/client"
 import { useUserOperationExecutor } from "./useUserOpExecutor"
-import { UNISWAP_FACTORY_ADDRESS, UNISWAP_ROUTER_ADDRESS } from "../constants/addresses"
+import { UNISWAP_FACTORY_ADDRESS, UNISWAP_ROUTER_ADDRESS, WRAPPED_SEPOLIA_ADDRESS } from "../constants/addresses"
 import { erc20Abi } from "../abi/erc20"
 import { dexRouterAbi } from "../abi/dexRouter"
 
@@ -20,20 +20,11 @@ interface TransactionResult {
   error?: string;
 }
 
-interface PoolInfo {
-  tokenA: { symbol: string; address: string; reserve: string };
-  tokenB: { symbol: string; address: string; reserve: string };
-  pairAddress: string;
-  exists: boolean;
-}
-
 export function useSwap(aaAddress: Hex) {
   const { executeCallData } = useUserOperationExecutor(aaAddress);
 
-  // ペアが存在するかどうかを確認
   const checkPairExists = async (fromAddress: string, toAddress: string): Promise<{exists: boolean; pairAddress: string}> => {
     try {
-      // Factoryコントラクトを使用
       const pairAddress = await publicClient.readContract({
         address: UNISWAP_FACTORY_ADDRESS as `0x${string}`,
         abi: dexRouterAbi,
@@ -41,7 +32,6 @@ export function useSwap(aaAddress: Hex) {
         args: [fromAddress, toAddress]
       }) as `0x${string}`;
       
-      // アドレスがゼロアドレスでなければ、ペアは存在する
       const exists = pairAddress !== '0x0000000000000000000000000000000000000000';
       console.log(pairAddress)
       
@@ -52,77 +42,51 @@ export function useSwap(aaAddress: Hex) {
     }
   };
 
-  // サポートされているトークンペアかどうかを確認（プール存在確認）
   const isSupportedPair = async (fromAddress: string, toAddress: string): Promise<boolean> => {
     const { exists } = await checkPairExists(fromAddress, toAddress);
     return exists;
   };
 
-  const approveToken = async (tokenAddress: string, amount: string): Promise<TransactionResult> => {
-    try {
-      const approveData = encodeFunctionData({
-        abi: erc20Abi,
-        functionName: 'approve',
-        args: [UNISWAP_ROUTER_ADDRESS, parseEther(amount)]
-      });
-
-      const callData = encodeFunctionData({
-        abi: SimpleAccountABI,
-        functionName: 'execute',
-        args: [tokenAddress, '0x0', approveData]
-      });
-
-      return await executeCallData(callData);
-    } catch (error) {
-      console.error("Token approval error:", error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to approve token"
-      };
+const swap = async (options: SwapOptions): Promise<TransactionResult> => {
+  try {
+    const { fromToken, toToken, amount, slippage, deadline } = options;
+    
+    // ペアの存在確認
+    const fromTokenAddress = fromToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
+    const toTokenAddress = toToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
+    
+    const pairSupported = await isSupportedPair(fromTokenAddress, toTokenAddress);
+    if (!pairSupported) {
+      throw new Error("This token pair doesn't have a liquidity pool.");
     }
-  };
 
-  // スワップ処理
-  const swap = async (options: SwapOptions): Promise<TransactionResult> => {
-    try {
-      const { fromToken, toToken, amount, slippage, deadline } = options;
-      
-      // ペアの存在確認
-      const pairSupported = await isSupportedPair(fromToken, toToken);
-      if (!pairSupported) {
-        throw new Error("This token pair doesn't have a liquidity pool.");
-      }
+    if (parseFloat(amount) <= 0) {
+      throw new Error("Amount must be greater than 0");
+    }
 
-      if (parseFloat(amount) <= 0) {
-        throw new Error("Amount must be greater than 0");
-      }
+    const estimatedOut = await getSwapEstimate(fromTokenAddress, toTokenAddress, amount);
+    if (parseFloat(estimatedOut) <= 0) {
+      throw new Error("Could not estimate output amount. The pool may have insufficient liquidity.");
+    }
 
-      // 入力トークンに対する承認
-      const approvalResult = await approveToken(fromToken, amount);
-      if (!approvalResult.success) {
-        throw new Error(`Failed to approve token: ${approvalResult.error}`);
-      }
+    const amountOutMin = parseFloat(estimatedOut) * (1 - slippage / 100);
+    const amountOutMinBigInt = parseEther(amountOutMin.toString());
+    
+    const deadlineTimestamp = Math.floor(Date.now() / 1000) + deadline;
+    
+    // 3つのケースで処理を分岐:
+    // 1. ETH -> Token: ETHをラップしてからswap（またはswapETHForTokensを使用）
+    // 2. Token -> ETH: TokenからETHへのswap
+    // 3. Token -> Token: TokenからTokenへのswap
 
-      // 見積もり額の取得
-      const estimatedOut = await getSwapEstimate(fromToken, toToken, amount);
-      if (parseFloat(estimatedOut) <= 0) {
-        throw new Error("Could not estimate output amount. The pool may have insufficient liquidity.");
-      }
-
-      // 最小受け取り額の計算（スリッページを考慮）
-      const amountOutMin = parseFloat(estimatedOut) * (1 - slippage / 100);
-      
-      // スワップ関数の呼び出し
-      const path = [fromToken, toToken];
-      const deadlineTimestamp = Math.floor(Date.now() / 1000) + deadline;
-      
+    if (fromToken === 'ETH') {
+      // TODO: Swapする前にWrap
       const swapData = encodeFunctionData({
         abi: dexRouterAbi,
-        functionName: 'swapExactTokensForTokens',
+        functionName: 'swapExactETHForTokens',
         args: [
-          parseEther(amount),
-          parseEther(amountOutMin.toString()),
-          path,
+          amountOutMinBigInt,
+          [WRAPPED_SEPOLIA_ADDRESS, toToken],
           aaAddress,
           BigInt(deadlineTimestamp)
         ]
@@ -131,27 +95,119 @@ export function useSwap(aaAddress: Hex) {
       const callData = encodeFunctionData({
         abi: SimpleAccountABI,
         functionName: 'execute',
-        args: [UNISWAP_ROUTER_ADDRESS, '0x0', swapData]
+        args: [
+          UNISWAP_ROUTER_ADDRESS, 
+          parseEther(amount),
+          swapData
+        ]
       });
 
       return await executeCallData(callData);
-    } catch (error) {
-      console.error("Swap error:", error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to swap tokens"
-      };
     }
-  };
+    
+    else if (toToken === 'ETH') {
+      const approveData = encodeFunctionData({
+        abi: erc20Abi,
+        functionName: 'approve',
+        args: [UNISWAP_ROUTER_ADDRESS, parseEther(amount)]
+      });
 
-  // スワップレート見積もり
+      const swapData = encodeFunctionData({
+        abi: dexRouterAbi,
+        functionName: 'swapExactTokensForETH',
+        args: [
+          parseEther(amount),
+          amountOutMinBigInt,
+          [fromToken, WRAPPED_SEPOLIA_ADDRESS],
+          aaAddress,
+          BigInt(deadlineTimestamp)
+        ]
+      });
+
+      const targets = [
+        fromToken,
+        UNISWAP_ROUTER_ADDRESS
+      ];
+      
+      const values = [
+        BigInt(0),
+        BigInt(0)
+      ];
+      
+      const datas = [
+        approveData,
+        swapData
+      ];
+
+      const callData = encodeFunctionData({
+        abi: SimpleAccountABI,
+        functionName: 'executeBatch',
+        args: [targets, values, datas]
+      });
+
+      return await executeCallData(callData);
+    }
+    
+    else {
+      console.log("token to token")
+
+      const approveData = encodeFunctionData({
+        abi: erc20Abi,
+        functionName: 'approve',
+        args: [UNISWAP_ROUTER_ADDRESS, parseEther(amount)]
+      });
+
+      const swapData = encodeFunctionData({
+        abi: dexRouterAbi,
+        functionName: 'swapExactTokensForTokens',
+        args: [
+          parseEther(amount),
+          amountOutMinBigInt,
+          [fromToken, toToken],
+          aaAddress,
+          BigInt(deadlineTimestamp)
+        ]
+      });
+
+      const targets = [
+        fromToken,
+        UNISWAP_ROUTER_ADDRESS
+      ];
+      
+      const values = [
+        BigInt(0),
+        BigInt(0)
+      ];
+      
+      const datas = [
+        approveData,
+        swapData
+      ];
+
+      // 4. executeBatchの実行
+      const callData = encodeFunctionData({
+        abi: SimpleAccountABI,
+        functionName: 'executeBatch',
+        args: [targets, values, datas]
+      });
+
+      return await executeCallData(callData);
+    }
+  } catch (error) {
+    console.error("Swap error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to swap tokens"
+    };
+  }
+};
+
   const getSwapEstimate = async (fromToken: string, toToken: string, amount: string): Promise<string> => {
     try {
       if (!amount || parseFloat(amount) <= 0) {
         return "0";
       }
 
-      // ペアの存在確認
       const pairSupported = await isSupportedPair(fromToken, toToken);
       if (!pairSupported) {
         console.warn("This token pair doesn't have a liquidity pool");
@@ -159,7 +215,6 @@ export function useSwap(aaAddress: Hex) {
       }
 
       try {
-        // 実際のDEXルーターを使用して見積もりを取得
         const amountsOut = await publicClient.readContract({
           address: UNISWAP_ROUTER_ADDRESS as `0x${string}`,
           abi: dexRouterAbi,
@@ -175,7 +230,7 @@ export function useSwap(aaAddress: Hex) {
         console.error("Failed to get amounts out:", error);
         
         // フォールバック: シンプルなダミーレートを使用
-        // 実際の実装では削除してください
+        // 実際の実装では削除
         const estimatedAmount = parseFloat(amount) * 1.5;
         return estimatedAmount.toString();
       }
@@ -185,7 +240,6 @@ export function useSwap(aaAddress: Hex) {
     }
   };
 
-  // トークンのシンボルを取得
   const getTokenSymbol = async (tokenAddress: string): Promise<string> => {
     try {
       const symbol = await publicClient.readContract({
@@ -201,78 +255,6 @@ export function useSwap(aaAddress: Hex) {
     }
   };
 
-  // プール情報取得
-  const getPoolInfo = async (tokenA: string, tokenB: string): Promise<PoolInfo> => {
-    try {
-      // ペアの確認
-      const { exists, pairAddress } = await checkPairExists(tokenA, tokenB);
-      
-      if (!exists || pairAddress === '0x') {
-        return {
-          tokenA: { symbol: await getTokenSymbol(tokenA), address: tokenA, reserve: "0" },
-          tokenB: { symbol: await getTokenSymbol(tokenB), address: tokenB, reserve: "0" },
-          pairAddress: '0x',
-          exists: false
-        };
-      }
-
-      try {
-        // プールの流動性情報を取得
-        const [reserve0, reserve1] = await publicClient.readContract({
-          address: pairAddress as `0x${string}`,
-          abi: dexRouterAbi,
-          functionName: 'getReserves'
-        }) as [bigint, bigint, number];
-        
-        // トークンのシンボルを取得
-        const symbolA = await getTokenSymbol(tokenA);
-        const symbolB = await getTokenSymbol(tokenB);
-        
-        return {
-          tokenA: { 
-            symbol: symbolA, 
-            address: tokenA, 
-            reserve: formatEther(reserve0) 
-          },
-          tokenB: { 
-            symbol: symbolB, 
-            address: tokenB, 
-            reserve: formatEther(reserve1) 
-          },
-          pairAddress,
-          exists: true
-        };
-      } catch (error) {
-        console.error("Failed to get reserves:", error);
-        
-        // フォールバック: ダミーデータを返す
-        return {
-          tokenA: { 
-            symbol: await getTokenSymbol(tokenA), 
-            address: tokenA, 
-            reserve: "1000" 
-          },
-          tokenB: { 
-            symbol: await getTokenSymbol(tokenB), 
-            address: tokenB, 
-            reserve: "1500" 
-          },
-          pairAddress,
-          exists: true
-        };
-      }
-    } catch (error) {
-      console.error("Failed to get pool info:", error);
-      return {
-        tokenA: { symbol: "UNKNOWN", address: tokenA, reserve: "0" },
-        tokenB: { symbol: "UNKNOWN", address: tokenB, reserve: "0" },
-        pairAddress: '0x',
-        exists: false
-      };
-    }
-  };
-
-  // トークンの残高を取得
   const getTokenBalance = async (tokenAddress: string): Promise<string> => {
     try {
       const balance = await publicClient.readContract({
@@ -289,7 +271,6 @@ export function useSwap(aaAddress: Hex) {
     }
   };
 
-  // トークンの許可残高を取得
   const getAllowance = async (tokenAddress: string): Promise<string> => {
     try {
       const allowance = await publicClient.readContract({
@@ -309,10 +290,8 @@ export function useSwap(aaAddress: Hex) {
   return {
     swap,
     getSwapEstimate,
-    getPoolInfo,
     isSupportedPair,
     checkPairExists,
-    approveToken,
     getTokenBalance,
     getAllowance,
     getTokenSymbol

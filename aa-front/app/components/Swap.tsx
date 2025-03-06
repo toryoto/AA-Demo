@@ -147,7 +147,6 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
     swap, 
     getSwapEstimate, 
     isSupportedPair, 
-    approveToken, 
     getTokenBalance, 
     getAllowance,
     getTokenSymbol
@@ -309,7 +308,6 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
   }, [fromAmount, fromToken, toToken, pairSupported]);
 
   const switchTokens = () => {
-    // Don't switch if one of the tokens is not selected
     if (!fromToken || !toToken) return;
     
     setFromToken(toToken);
@@ -318,65 +316,67 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
     setToAmount(fromAmount);
   };
 
-  const handleSwap = async () => {
-    if (!fromToken || !toToken || !fromAmount || parseFloat(fromAmount) <= 0 || !pairSupported) return;
+  // handleSwap関数を修正
+const handleSwap = async () => {
+  if (!fromToken || !toToken || !fromAmount || parseFloat(fromAmount) <= 0 || !pairSupported) return;
+  
+  setSwapping(true);
+  setSwapStatus({ status: null, message: '' });
+  
+  try {
+    // Handle ETH by using Wrapped ETH address
+    const fromTokenAddress = fromToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
+    const toTokenAddress = toToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
     
-    setSwapping(true);
-    setSwapStatus({ status: null, message: '' });
-    
-    try {
-      // Handle ETH by using Wrapped ETH address
-      const fromTokenAddress = fromToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
-      const toTokenAddress = toToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
-      
-      // Approve token if necessary (only for non-ETH tokens)
-      if (fromToken !== 'ETH' && !tokenApproved) {
-        const approvalResult = await approveToken(fromTokenAddress, fromAmount);
-        
-        if (!approvalResult.success) {
-          throw new Error(`Failed to approve token: ${approvalResult.error}`);
-        }
-        
-        setTokenApproved(true);
-      }
-      
-      // Execute swap
-      const swapResult = await swap({
-        fromToken: fromTokenAddress,
-        toToken: toTokenAddress,
-        amount: fromAmount,
-        slippage: slippage,
-        deadline: 600 // 10 minutes deadline
-      });
-      
-      if (swapResult.success) {
-        const fromTokenSymbol = fromToken === 'ETH' ? 'ETH' : await getTokenSymbol(fromTokenAddress);
-        const toTokenSymbol = toToken === 'ETH' ? 'ETH' : await getTokenSymbol(toTokenAddress);
-        
-        setSwapStatus({
-          status: 'success',
-          message: `Successfully swapped ${fromAmount} ${fromTokenSymbol} for ${toAmount} ${toTokenSymbol}`
-        });
-        
-        // Reset form after successful swap
-        setFromAmount('');
-        setToAmount('');
-        
-        // Refresh balances
-        fetchBalance();
-        if (onSwapComplete) onSwapComplete();
-      } else {
-        throw new Error(swapResult.error || 'Swap failed');
-      }
-    } catch (error) {
-      setSwapStatus({
-        status: 'error',
-        message: error instanceof Error ? error.message : 'Unknown error occurred'
-      });
-    } finally {
-      setSwapping(false);
+    // 状態表示用のメッセージを作成
+    let actionMessage = "";
+    if (fromToken === 'ETH') {
+      actionMessage = "ETH to token swap";
+    } else if (toToken === 'ETH') {
+      actionMessage = "Token to ETH swap with approval";
+    } else {
+      actionMessage = "Token to token swap with approval";
     }
-  };
+    
+    console.log(`Executing ${actionMessage}`);
+    
+    // Execute swap with batch processing
+    const swapResult = await swap({
+      fromToken: fromTokenAddress,
+      toToken: toTokenAddress,
+      amount: fromAmount,
+      slippage: slippage,
+      deadline: 600
+    });
+    
+    if (swapResult.success) {
+      const fromTokenSymbol = fromToken === 'ETH' ? 'ETH' : await getTokenSymbol(fromTokenAddress);
+      const toTokenSymbol = toToken === 'ETH' ? 'ETH' : await getTokenSymbol(toTokenAddress);
+      
+      setSwapStatus({
+        status: 'success',
+        message: `Successfully swapped ${fromAmount} ${fromTokenSymbol} for ${toAmount} ${toTokenSymbol}`
+      });
+      
+      // Reset form after successful swap
+      setFromAmount('');
+      setToAmount('');
+      
+      // Refresh balances
+      fetchBalance();
+      if (onSwapComplete) onSwapComplete();
+    } else {
+      throw new Error(swapResult.error || 'Swap failed');
+    }
+  } catch (error) {
+    setSwapStatus({
+      status: 'error',
+      message: error instanceof Error ? error.message : 'Unknown error occurred'
+    });
+  } finally {
+    setSwapping(false);
+  }
+};
 
   const handleMaxButtonClick = () => {
     // Handle ETH differently to leave some for gas
@@ -433,9 +433,6 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
             </TooltipProvider>
           </div>
         </div>
-        <CardDescription className="text-sm text-slate-500 mt-1">
-          Swap between ETH and popular ERC-20 tokens
-        </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -541,7 +538,7 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
           <div className="flex justify-between items-center">
             <Label className="text-sm font-medium">To</Label>
             <div className="text-xs text-slate-500">
-              Balance: <span className="balance-placeholder">0.00</span> {getTokenSymbolLocal(toToken || '')}
+              Balance: {toToken === 'ETH' ? parseFloat(ethBalance).toFixed(6) : parseFloat(toTokenBalance).toFixed(6)} {getTokenSymbolLocal(toToken)}
             </div>
           </div>
           
@@ -614,7 +611,7 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
           {swapping ? (
             <div className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Swapping...</span>
+              <span>Processing transaction...</span>
             </div>
           ) : isCheckingPair ? (
             <div className="flex items-center gap-2">
@@ -629,8 +626,6 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
             "No liquidity for this pair"
           ) : !fromAmount || parseFloat(fromAmount) <= 0 ? (
             "Enter an amount"
-          ) : fromToken !== 'ETH' && !tokenApproved ? (
-            `Approve ${getTokenSymbolLocal(fromToken)} first`
           ) : (
             `Swap ${getTokenSymbolLocal(fromToken)} for ${getTokenSymbolLocal(toToken)}`
           )}
