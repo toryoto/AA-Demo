@@ -6,8 +6,7 @@ import {
   Info, 
   Loader2, 
   AlertCircle,
-  CheckCircle2,
-  ChevronDown
+  CheckCircle2
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -15,7 +14,6 @@ import { Label } from './ui/label';
 import { 
   Card, 
   CardContent, 
-  CardDescription, 
   CardHeader, 
   CardTitle, 
   CardFooter 
@@ -34,121 +32,24 @@ import { useFetchAABalance } from '../hooks/useFetchAABalance';
 import { 
   WRAPPED_SEPOLIA_ADDRESS 
 } from '../constants/addresses';
-import Image from 'next/image';
 import { TOKEN_OPTIONS } from '../constants/tokenList';
-import { useSwap } from '../hooks/useSwap'; // Import the custom hook
+import { useSwap } from '../hooks/useSwap';
+import TokenSelector from './TokenSelector';
 
 interface SwapProps {
   isDeployed: boolean;
   onSwapComplete?: () => void;
 }
 
-// Token Selector Component
-const TokenSelector = ({ 
-  value, 
-  onChange, 
-  disabled = [] 
-}: { 
-  value: string; 
-  onChange: (value: string) => void; 
-  disabled?: string[];
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const ref = React.useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  const handleSelectToken = (tokenValue: string) => {
-    onChange(tokenValue);
-    setIsOpen(false);
-  };
-
-  const selectedToken = TOKEN_OPTIONS.find(t => t.address === value);
-
-  return (
-    <div className="relative" ref={ref}>
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full justify-between text-left font-normal"
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        {selectedToken ? (
-          <div className="flex items-center">
-            <Image 
-              width={24}
-              height={24}
-              src={selectedToken.logo} 
-              alt={selectedToken.symbol} 
-              className="w-5 h-5 mr-2 rounded-full"
-            />
-            {selectedToken.symbol}
-          </div>
-        ) : (
-          "Select token"
-        )}
-        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-      </Button>
-      
-      {isOpen && (
-        <div className="absolute top-full left-0 z-10 mt-1 w-60 rounded-md border border-slate-200 bg-white shadow-lg">
-          <div className="p-1">
-            {TOKEN_OPTIONS.map((option) => (
-              <button
-                key={option.address}
-                className={`
-                  w-full flex items-center px-2 py-2 text-sm rounded-md
-                  ${value === option.address ? 'bg-slate-100' : 'hover:bg-slate-50'}
-                  ${disabled.includes(option.address) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
-                `}
-                onClick={() => !disabled.includes(option.address) && handleSelectToken(option.address)}
-                disabled={disabled.includes(option.address)}
-              >
-                <Image
-                  width={24}
-                  height={24}
-                  src={option.logo} 
-                  alt={option.symbol} 
-                  className="w-6 h-6 mr-2 rounded-full"
-                />
-                <div className="flex flex-col items-start">
-                  <div className="font-medium">{option.symbol}</div>
-                  <div className="text-xs text-slate-500">{option.name}</div>
-                </div>
-                {value === option.address && (
-                  <CheckCircle2 className="ml-auto h-4 w-4 text-green-600" />
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
 export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
   const { aaAddress } = useAA();
   const { balance: ethBalance, fetchBalance } = useFetchAABalance(aaAddress);
   
-  // Initialize the useSwap hook
   const { 
     swap, 
     getSwapEstimate, 
     isSupportedPair, 
     getTokenBalance, 
-    getAllowance,
     getTokenSymbol
   } = useSwap(aaAddress);
 
@@ -165,7 +66,6 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
   });
   const [priceImpact, setPriceImpact] = useState<string>('0.00');
   const [pairSupported, setPairSupported] = useState<boolean>(false);
-  const [tokenApproved, setTokenApproved] = useState<boolean>(false);
   const [isCheckingPair, setIsCheckingPair] = useState<boolean>(false);
   // Add states to store token balances to prevent infinite loops
   const [fromTokenBalance, setFromTokenBalance] = useState<string>('0');
@@ -254,28 +154,6 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
     }
   }, [fromToken, toToken]);
 
-  // Check token approval when from token and amount change
-  useEffect(() => {
-    const checkTokenApproval = async () => {
-      if (fromToken && fromToken !== 'ETH' && fromAmount && parseFloat(fromAmount) > 0) {
-        try {
-          const allowance = await getAllowance(fromToken);
-          setTokenApproved(parseFloat(allowance) >= parseFloat(fromAmount));
-        } catch (error) {
-          console.error("Error checking token approval:", error);
-          setTokenApproved(false);
-        }
-      } else if (fromToken === 'ETH') {
-        // ETH doesn't need approval
-        setTokenApproved(true);
-      }
-    };
-    
-    if (fromToken && fromAmount && parseFloat(fromAmount) > 0) {
-      checkTokenApproval();
-    }
-  }, [fromToken, fromAmount]);
-
   // Get swap estimate when fromAmount changes
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
@@ -316,67 +194,66 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
     setToAmount(fromAmount);
   };
 
-  // handleSwap関数を修正
-const handleSwap = async () => {
-  if (!fromToken || !toToken || !fromAmount || parseFloat(fromAmount) <= 0 || !pairSupported) return;
-  
-  setSwapping(true);
-  setSwapStatus({ status: null, message: '' });
-  
-  try {
-    // Handle ETH by using Wrapped ETH address
-    const fromTokenAddress = fromToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
-    const toTokenAddress = toToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
+  const handleSwap = async () => {
+    if (!fromToken || !toToken || !fromAmount || parseFloat(fromAmount) <= 0 || !pairSupported) return;
     
-    // 状態表示用のメッセージを作成
-    let actionMessage = "";
-    if (fromToken === 'ETH') {
-      actionMessage = "ETH to token swap";
-    } else if (toToken === 'ETH') {
-      actionMessage = "Token to ETH swap with approval";
-    } else {
-      actionMessage = "Token to token swap with approval";
-    }
+    setSwapping(true);
+    setSwapStatus({ status: null, message: '' });
     
-    console.log(`Executing ${actionMessage}`);
-    
-    // Execute swap with batch processing
-    const swapResult = await swap({
-      fromToken: fromTokenAddress,
-      toToken: toTokenAddress,
-      amount: fromAmount,
-      slippage: slippage,
-      deadline: 600
-    });
-    
-    if (swapResult.success) {
-      const fromTokenSymbol = fromToken === 'ETH' ? 'ETH' : await getTokenSymbol(fromTokenAddress);
-      const toTokenSymbol = toToken === 'ETH' ? 'ETH' : await getTokenSymbol(toTokenAddress);
+    try {
+      // Handle ETH by using Wrapped ETH address
+      const fromTokenAddress = fromToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
+      const toTokenAddress = toToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
       
-      setSwapStatus({
-        status: 'success',
-        message: `Successfully swapped ${fromAmount} ${fromTokenSymbol} for ${toAmount} ${toTokenSymbol}`
+      // 状態表示用のメッセージを作成
+      let actionMessage = "";
+      if (fromToken === 'ETH') {
+        actionMessage = "ETH to token swap";
+      } else if (toToken === 'ETH') {
+        actionMessage = "Token to ETH swap with approval";
+      } else {
+        actionMessage = "Token to token swap with approval";
+      }
+      
+      console.log(`Executing ${actionMessage}`);
+      
+      // Execute swap with batch processing
+      const swapResult = await swap({
+        fromToken: fromTokenAddress,
+        toToken: toTokenAddress,
+        amount: fromAmount,
+        slippage: slippage,
+        deadline: 600
       });
       
-      // Reset form after successful swap
-      setFromAmount('');
-      setToAmount('');
-      
-      // Refresh balances
-      fetchBalance();
-      if (onSwapComplete) onSwapComplete();
-    } else {
-      throw new Error(swapResult.error || 'Swap failed');
+      if (swapResult.success) {
+        const fromTokenSymbol = fromToken === 'ETH' ? 'ETH' : await getTokenSymbol(fromTokenAddress);
+        const toTokenSymbol = toToken === 'ETH' ? 'ETH' : await getTokenSymbol(toTokenAddress);
+        
+        setSwapStatus({
+          status: 'success',
+          message: `Successfully swapped ${fromAmount} ${fromTokenSymbol} for ${toAmount} ${toTokenSymbol}`
+        });
+        
+        // Reset form after successful swap
+        setFromAmount('');
+        setToAmount('');
+        
+        // Refresh balances
+        fetchBalance();
+        if (onSwapComplete) onSwapComplete();
+      } else {
+        throw new Error(swapResult.error || 'Swap failed');
+      }
+    } catch (error) {
+      setSwapStatus({
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
+      });
+    } finally {
+      setSwapping(false);
     }
-  } catch (error) {
-    setSwapStatus({
-      status: 'error',
-      message: error instanceof Error ? error.message : 'Unknown error occurred'
-    });
-  } finally {
-    setSwapping(false);
-  }
-};
+  };
 
   const handleMaxButtonClick = () => {
     // Handle ETH differently to leave some for gas
