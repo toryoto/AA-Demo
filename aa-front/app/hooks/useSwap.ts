@@ -43,7 +43,11 @@ export function useSwap(aaAddress: Hex) {
   };
 
   const isSupportedPair = async (fromAddress: string, toAddress: string): Promise<boolean> => {
-    const { exists } = await checkPairExists(fromAddress, toAddress);
+    const actualFromAddress = fromAddress === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : fromAddress;
+    const actualToAddress = toAddress === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : toAddress;
+    
+    const { exists } = await checkPairExists(actualFromAddress, actualToAddress);
+    console.log('pair support: ', exists)
     return exists;
   };
 
@@ -271,29 +275,12 @@ const swap = async (options: SwapOptions): Promise<TransactionResult> => {
     }
   };
 
-  const getAllowance = async (tokenAddress: string): Promise<string> => {
-    try {
-      const allowance = await publicClient.readContract({
-        address: tokenAddress as `0x${string}`,
-        abi: erc20Abi,
-        functionName: 'allowance',
-        args: [aaAddress, UNISWAP_ROUTER_ADDRESS]
-      }) as bigint;
-      
-      return formatEther(allowance);
-    } catch (error) {
-      console.error(`Failed to get allowance for ${tokenAddress}:`, error);
-      return "0";
-    }
-  };
-
   return {
     swap,
     getSwapEstimate,
     isSupportedPair,
     checkPairExists,
     getTokenBalance,
-    getAllowance,
     getTokenSymbol
   };
 }

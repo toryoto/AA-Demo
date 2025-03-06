@@ -53,7 +53,7 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
     getTokenSymbol
   } = useSwap(aaAddress);
 
-  const [fromToken, setFromToken] = useState<string>('ETH');
+  const [fromToken, setFromToken] = useState<string>('SEP');
   const [toToken, setToToken] = useState<string>('');
   const [fromAmount, setFromAmount] = useState<string>('');
   const [toAmount, setToAmount] = useState<string>('');
@@ -75,7 +75,7 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
   useEffect(() => {
     const updateTokenBalances = async () => {
       if (fromToken) {
-        if (fromToken === 'ETH') {
+        if (fromToken === 'SEP') {
           setFromTokenBalance(ethBalance);
         } else {
           try {
@@ -89,7 +89,7 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
       }
       
       if (toToken) {
-        if (toToken === 'ETH') {
+        if (toToken === 'SEP') {
           setToTokenBalance(ethBalance);
         } else {
           try {
@@ -118,8 +118,8 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
         
         try {
           // Handle ETH by using Wrapped ETH address
-          const fromTokenAddress = fromToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
-          const toTokenAddress = toToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
+          const fromTokenAddress = fromToken === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
+          const toTokenAddress = toToken === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
           
           // Check if pair is supported (only WSEP and DAI have liquidity)
           const supported = await isSupportedPair(fromTokenAddress, toTokenAddress);
@@ -162,8 +162,8 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
       const getEstimate = async () => {
         try {
           // Handle ETH by using Wrapped ETH address
-          const fromTokenAddress = fromToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
-          const toTokenAddress = toToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
+          const fromTokenAddress = fromToken === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
+          const toTokenAddress = toToken === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
           
           const estimate = await getSwapEstimate(fromTokenAddress, toTokenAddress, fromAmount);
           setToAmount(estimate);
@@ -202,15 +202,15 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
     
     try {
       // Handle ETH by using Wrapped ETH address
-      const fromTokenAddress = fromToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
-      const toTokenAddress = toToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
+      const fromTokenAddress = fromToken === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
+      const toTokenAddress = toToken === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
       
       // 状態表示用のメッセージを作成
       let actionMessage = "";
-      if (fromToken === 'ETH') {
-        actionMessage = "ETH to token swap";
-      } else if (toToken === 'ETH') {
-        actionMessage = "Token to ETH swap with approval";
+      if (fromToken === 'SEP') {
+        actionMessage = "SEP to token swap";
+      } else if (toToken === 'SEP') {
+        actionMessage = "Token to SEP swap with approval";
       } else {
         actionMessage = "Token to token swap with approval";
       }
@@ -227,8 +227,8 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
       });
       
       if (swapResult.success) {
-        const fromTokenSymbol = fromToken === 'ETH' ? 'ETH' : await getTokenSymbol(fromTokenAddress);
-        const toTokenSymbol = toToken === 'ETH' ? 'ETH' : await getTokenSymbol(toTokenAddress);
+        const fromTokenSymbol = fromToken === 'SEP' ? 'SEP' : await getTokenSymbol(fromTokenAddress);
+        const toTokenSymbol = toToken === 'SEP' ? 'SEP' : await getTokenSymbol(toTokenAddress);
         
         setSwapStatus({
           status: 'success',
@@ -257,7 +257,7 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
 
   const handleMaxButtonClick = () => {
     // Handle ETH differently to leave some for gas
-    if (fromToken === 'ETH') {
+    if (fromToken === 'SEP') {
       const maxEth = Math.max(0, parseFloat(fromTokenBalance) - 0.01);
       setFromAmount(maxEth.toFixed(6));
     } else {
@@ -266,7 +266,7 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
   };
 
   const getTokenSymbolLocal = (tokenAddress: string): string => {
-    if (tokenAddress === 'ETH') return 'ETH';
+    if (tokenAddress === 'SEP') return 'SEP';
     
     const token = TOKEN_OPTIONS.find(t => t.address === tokenAddress);
     return token ? token.symbol : tokenAddress.slice(0, 6) + '...' + tokenAddress.slice(-4);
@@ -357,7 +357,7 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
           <div className="flex justify-between items-center">
             <Label className="text-sm font-medium">From</Label>
             <div className="text-xs text-slate-500">
-              Balance: {fromToken === 'ETH' ? parseFloat(ethBalance).toFixed(6) : parseFloat(fromTokenBalance).toFixed(6)} {getTokenSymbolLocal(fromToken)}
+              Balance: {fromToken === 'SEP' ? parseFloat(ethBalance).toFixed(6) : parseFloat(fromTokenBalance).toFixed(6)} {getTokenSymbolLocal(fromToken)}
             </div>
           </div>
           
@@ -415,7 +415,7 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
           <div className="flex justify-between items-center">
             <Label className="text-sm font-medium">To</Label>
             <div className="text-xs text-slate-500">
-              Balance: {toToken === 'ETH' ? parseFloat(ethBalance).toFixed(6) : parseFloat(toTokenBalance).toFixed(6)} {getTokenSymbolLocal(toToken)}
+              Balance: {toToken === 'SEP' ? parseFloat(ethBalance).toFixed(6) : parseFloat(toTokenBalance).toFixed(6)} {getTokenSymbolLocal(toToken)}
             </div>
           </div>
           
