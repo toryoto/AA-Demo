@@ -5,6 +5,7 @@ import { useUserOperationExecutor } from "./useUserOpExecutor"
 import { UNISWAP_FACTORY_ADDRESS, UNISWAP_ROUTER_ADDRESS, WRAPPED_SEPOLIA_ADDRESS } from "../constants/addresses"
 import { erc20Abi } from "../abi/erc20"
 import { dexRouterAbi } from "../abi/dexRouter"
+import { wrappedSepolia } from "../abi/wrappedSepolia"
 
 interface SwapOptions {
   fromToken: string;  // トークンのアドレス
@@ -54,10 +55,11 @@ export function useSwap(aaAddress: Hex) {
 const swap = async (options: SwapOptions): Promise<TransactionResult> => {
   try {
     const { fromToken, toToken, amount, slippage, deadline } = options;
+    console.log(fromToken)
     
     // ペアの存在確認
-    const fromTokenAddress = fromToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
-    const toTokenAddress = toToken === 'ETH' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
+    const fromTokenAddress = fromToken === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
+    const toTokenAddress = toToken === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
     
     const pairSupported = await isSupportedPair(fromTokenAddress, toTokenAddress);
     if (!pairSupported) {
@@ -77,18 +79,27 @@ const swap = async (options: SwapOptions): Promise<TransactionResult> => {
     const amountOutMinBigInt = parseEther(amountOutMin.toString());
     
     const deadlineTimestamp = Math.floor(Date.now() / 1000) + deadline;
-    
-    // 3つのケースで処理を分岐:
-    // 1. ETH -> Token: ETHをラップしてからswap（またはswapETHForTokensを使用）
-    // 2. Token -> ETH: TokenからETHへのswap
-    // 3. Token -> Token: TokenからTokenへのswap
 
-    if (fromToken === 'ETH') {
-      // TODO: Swapする前にWrap
+    if (fromToken === 'SEP') {
+      console.log('SEP to ERC20')
+
+      const depositWETHData = encodeFunctionData({
+        abi: wrappedSepolia,
+        functionName: 'deposit',
+        args: []
+      });
+
+      const approveData = encodeFunctionData({
+        abi: erc20Abi,
+        functionName: 'approve',
+        args: [UNISWAP_ROUTER_ADDRESS, parseEther(amount)]
+      });
+
       const swapData = encodeFunctionData({
         abi: dexRouterAbi,
-        functionName: 'swapExactETHForTokens',
+        functionName: 'swapExactTokensForTokens',
         args: [
+          parseEther(amount),
           amountOutMinBigInt,
           [WRAPPED_SEPOLIA_ADDRESS, toToken],
           aaAddress,
@@ -96,20 +107,35 @@ const swap = async (options: SwapOptions): Promise<TransactionResult> => {
         ]
       });
 
+      const targets = [
+        WRAPPED_SEPOLIA_ADDRESS,
+        WRAPPED_SEPOLIA_ADDRESS,
+        UNISWAP_ROUTER_ADDRESS
+      ];
+
+      const values = [
+        parseEther(amount),
+        BigInt(0),
+        BigInt(0)
+      ];
+
+      const datas = [
+        depositWETHData,
+        approveData,
+        swapData
+      ];
+
       const callData = encodeFunctionData({
         abi: SimpleAccountABI,
-        functionName: 'execute',
-        args: [
-          UNISWAP_ROUTER_ADDRESS, 
-          parseEther(amount),
-          swapData
-        ]
+        functionName: 'executeBatch',
+        args: [targets, values, datas]
       });
 
       return await executeCallData(callData);
     }
     
-    else if (toToken === 'ETH') {
+    else if (toToken === 'SEP') {
+      console.log('ERC20 to SEP')
       const approveData = encodeFunctionData({
         abi: erc20Abi,
         functionName: 'approve',
@@ -153,7 +179,7 @@ const swap = async (options: SwapOptions): Promise<TransactionResult> => {
     }
     
     else {
-      console.log("token to token")
+      console.log('ERC20 to ERC20')
 
       const approveData = encodeFunctionData({
         abi: erc20Abi,

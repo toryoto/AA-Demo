@@ -201,10 +201,6 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
     setSwapStatus({ status: null, message: '' });
     
     try {
-      // Handle ETH by using Wrapped ETH address
-      const fromTokenAddress = fromToken === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
-      const toTokenAddress = toToken === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
-      
       // 状態表示用のメッセージを作成
       let actionMessage = "";
       if (fromToken === 'SEP') {
@@ -219,14 +215,16 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
       
       // Execute swap with batch processing
       const swapResult = await swap({
-        fromToken: fromTokenAddress,
-        toToken: toTokenAddress,
+        fromToken: fromToken,
+        toToken: toToken,
         amount: fromAmount,
         slippage: slippage,
         deadline: 600
       });
       
       if (swapResult.success) {
+        const fromTokenAddress = fromToken === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
+        const toTokenAddress = toToken === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
         const fromTokenSymbol = fromToken === 'SEP' ? 'SEP' : await getTokenSymbol(fromTokenAddress);
         const toTokenSymbol = toToken === 'SEP' ? 'SEP' : await getTokenSymbol(toTokenAddress);
         
