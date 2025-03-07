@@ -377,10 +377,11 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
               <div className="relative flex-1">
                 <Input
                   type="number"
-                  placeholder="0.0"
+                  placeholder="0.0001"
                   value={fromAmount}
                   onChange={(e) => setFromAmount(e.target.value)}
                   className="pr-16 bg-white"
+                  step="0.0001"
                 />
                 <Button
                   variant="ghost"

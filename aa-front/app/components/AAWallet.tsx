@@ -31,17 +31,12 @@ import { WrapToken } from './WrapToken';
 import { TokenCreation } from './TokenCreation';
 import { Hex } from 'viem';
 import { Swap } from './Swap';
-import { useTokenManagement } from '../hooks/useTokenManagement';
-import { publicClient } from '../utils/client';
 
 export default function AAWallet() {
   const { address, isConnected } = useAccount();
   const { aaAddress, isDeployed, loading, deployAccount } = useAA();
   const [deploying, setDeploying] = useState(false);
   const { balance, isBalanceLoading, fetchBalance } = useFetchAABalance(aaAddress);
-  const { tokens } = useTokenManagement(publicClient, aaAddress);
-
-
 
   const handleDeploy = async () => {
     setDeploying(true);
@@ -257,7 +252,6 @@ export default function AAWallet() {
           <TabsContent value="swap" className="space-y-4 mt-6">
             <Swap
               isDeployed={isDeployed} 
-              userTokens={tokens}
               onSwapComplete={fetchBalance}
             />
           </TabsContent>
