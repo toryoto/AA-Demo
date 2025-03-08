@@ -2,7 +2,7 @@ import { encodeFunctionData, Hex, parseUnits, formatUnits } from "viem"
 import { SimpleAccountABI } from "../abi/simpleAccount"
 import { publicClient } from "../utils/client"
 import { useUserOperationExecutor } from "./useUserOpExecutor"
-import { DAI_ADDRESS, UNISWAP_FACTORY_ADDRESS, UNISWAP_ROUTER_ADDRESS, USDC_ADDRESS, WRAPPED_SEPOLIA_ADDRESS } from "../constants/addresses"
+import { DAI_ADDRESS, JPYC_ADDRESS, UNISWAP_FACTORY_ADDRESS, UNISWAP_ROUTER_ADDRESS, USDC_ADDRESS, WRAPPED_SEPOLIA_ADDRESS } from "../constants/addresses"
 import { erc20Abi } from "../abi/erc20"
 import { dexRouterAbi } from "../abi/dexRouter"
 import { wrappedSepolia } from "../abi/wrappedSepolia"
@@ -26,45 +26,25 @@ const TOKEN_DECIMALS: Record<string, number> = {
   [USDC_ADDRESS]: 6,
   [DAI_ADDRESS]: 18,
   [WRAPPED_SEPOLIA_ADDRESS]: 18,
+  [JPYC_ADDRESS]: 6,
   'SEP': 18,
 };
 
 export function useSwap(aaAddress: Hex) {
   const { executeCallData } = useUserOperationExecutor(aaAddress);
   
-  const getTokenDecimals = async (tokenAddress: string): Promise<number> => {
-    if (TOKEN_DECIMALS[tokenAddress]) {
-      return TOKEN_DECIMALS[tokenAddress];
-    }
-    
-    try {
-      const decimals = await publicClient.readContract({
-        address: tokenAddress as `0x${string}`,
-        abi: erc20Abi,
-        functionName: 'decimals'
-      }) as number;
-      
-      return decimals;
-    } catch (error) {
-      console.error(`Failed to get token decimals for ${tokenAddress}:`, error);
-      return 18;
-    }
+  const getTokenDecimals = (tokenAddress: string): number => {
+    return TOKEN_DECIMALS[tokenAddress];
   };
   
   const checkPairExists = async (fromAddress: string, toAddress: string): Promise<{exists: boolean; pairAddress: string}> => {
     try {
-      let pairAddress = '0x';
-  
-      if ((fromAddress === DAI_ADDRESS && toAddress === USDC_ADDRESS) || (fromAddress === USDC_ADDRESS && toAddress === DAI_ADDRESS)) {
-        pairAddress = '0xb272ec9B463564b7813c4b4F7d2F6bec83728b15';
-      } else {
-        pairAddress = await publicClient.readContract({
-          address: UNISWAP_FACTORY_ADDRESS as `0x${string}`,
-          abi: dexRouterAbi,
-          functionName: 'getPair',
-          args: [fromAddress, toAddress]
-        }) as `0x${string}`;
-      }
+      const pairAddress = await publicClient.readContract({
+        address: UNISWAP_FACTORY_ADDRESS as `0x${string}`,
+        abi: dexRouterAbi,
+        functionName: 'getPair',
+        args: [fromAddress, toAddress]
+      }) as `0x${string}`;
   
       const exists = pairAddress !== '0x0000000000000000000000000000000000000000';
       console.log('Pair address:', pairAddress);
@@ -104,7 +84,7 @@ export function useSwap(aaAddress: Hex) {
       }
 
       // Get input token decimals
-      const fromDecimals = await getTokenDecimals(fromTokenAddress);
+      const fromDecimals = getTokenDecimals(fromTokenAddress);
       
       // Parse input amount with correct decimals
       const inputAmount = parseUnits(amount, fromDecimals);
@@ -119,7 +99,7 @@ export function useSwap(aaAddress: Hex) {
       const amountOutMin = parseFloat(estimatedOut) * (1 - slippage / 100);
       
       // Get output token decimals
-      const toDecimals = await getTokenDecimals(toTokenAddress);
+      const toDecimals = getTokenDecimals(toTokenAddress);
       
       // Parse minimum output amount with correct decimals
       const amountOutMinBigInt = parseUnits(amountOutMin.toString(), toDecimals);
@@ -260,7 +240,6 @@ export function useSwap(aaAddress: Hex) {
           swapData
         ];
 
-        // 4. executeBatchの実行
         const callData = encodeFunctionData({
           abi: SimpleAccountABI,
           functionName: 'executeBatch',
@@ -304,7 +283,7 @@ export function useSwap(aaAddress: Hex) {
         
         if (amountsOut && amountsOut.length > 1) {
           // Format with correct decimals
-          const toDecimals = await getTokenDecimals(toToken);
+          const toDecimals = getTokenDecimals(toToken);
           return formatUnits(amountsOut[1], toDecimals);
         }
         return "0";
@@ -347,7 +326,7 @@ export function useSwap(aaAddress: Hex) {
       }) as bigint;
       
       // Format with correct decimals
-      const decimals = await getTokenDecimals(tokenAddress);
+      const decimals = getTokenDecimals(tokenAddress);
       return formatUnits(balance, decimals);
     } catch (error) {
       console.error(`Failed to get token balance for ${tokenAddress}:`, error);

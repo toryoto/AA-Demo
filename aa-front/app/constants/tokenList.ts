@@ -34,8 +34,8 @@ export const TOKEN_OPTIONS: TokenOption[] = [
     logo: 'https://coin-images.coingecko.com/coins/images/6319/large/USD_Coin_icon.png?1547042389' 
   },
   { 
-    symbol: 'JPYC', 
-    name: 'JPY Coin', 
+    symbol: 'JPYT', 
+    name: 'JPT Coin', 
     address: JPYC_ADDRESS, 
     logo: 'https://jpyc.jp/static/media/jpycPrepaidSymbol.46f34eb68974b2165b1ecf4a7357756c.svg' 
   }
