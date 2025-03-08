@@ -12,7 +12,7 @@ import {
   Shield,
   RefreshCw,
   ExternalLink,
-  ArrowDownUp
+  ArrowDownUp,
 } from 'lucide-react';
 import { 
   Card, 
@@ -31,10 +31,18 @@ import { WrapToken } from './WrapToken';
 import { TokenCreation } from './TokenCreation';
 import { Hex } from 'viem';
 import { Swap } from './Swap';
+import { Badge } from './ui/badge';
 
 export default function AAWallet() {
   const { address, isConnected } = useAccount();
-  const { aaAddress, isDeployed, loading, deployAccount } = useAA();
+  const { 
+    aaAddress, 
+    isDeployed, 
+    loading, 
+    deployAccount, 
+    addressMode,
+    setAddressMode,
+  } = useAA();
   const [deploying, setDeploying] = useState(false);
   const { balance, isBalanceLoading, fetchBalance } = useFetchAABalance(aaAddress);
 
@@ -101,7 +109,7 @@ export default function AAWallet() {
               <Label className="text-xs font-medium text-slate-500 mb-1 block">EOA Address</Label>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-mono break-all text-slate-800">
-                  {address ? shortenAddress(address) : ''}
+                  {address ? shortenAddress(address as Hex) : ''}
                 </span>
                 <Button 
                   variant="ghost" 
@@ -156,6 +164,59 @@ export default function AAWallet() {
             </div>
           </div>
 
+          {/* アドレス選択と切り替えセクション */}
+          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Active Address Mode</Label>
+                <div className="flex items-center gap-3">
+                  <Badge 
+                    variant={addressMode === 'eoa' ? 'default' : 'outline'}
+                    className={`cursor-pointer ${addressMode === 'eoa' ? 'bg-primary' : 'hover:bg-slate-100'}`}
+                    onClick={() => isDeployed && setAddressMode('eoa')}
+                  >
+                    EOA
+                    {addressMode === 'eoa' && <Check className="ml-1 h-3 w-3" />}
+                  </Badge>
+                  <Badge 
+                    variant={addressMode === 'aa' ? 'default' : 'outline'}
+                    className={`cursor-pointer ${!isDeployed ? 'opacity-50 cursor-not-allowed' : addressMode === 'aa' ? 'bg-primary' : 'hover:bg-slate-100'}`}
+                    onClick={() => isDeployed && setAddressMode('aa')}
+                  >
+                    Smart Account
+                    {addressMode === 'aa' && <Check className="ml-1 h-3 w-3" />}
+                  </Badge>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-4 bg-white p-3 rounded-lg border border-slate-200 w-full sm:w-auto">
+                <div>
+                  <div className="text-xs font-medium text-slate-500 mb-1">Balance</div>
+                  <div className="flex items-center gap-2">
+                    {isBalanceLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+                    ) : (
+                      <span className="font-semibold text-lg">{parseFloat(balance).toFixed(4)}</span>
+                    )}
+                    <span className="text-slate-600">ETH</span>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 w-6 p-0" 
+                      onClick={fetchBalance}
+                      title="Refresh balance"
+                    >
+                      <RefreshCw className="h-3 w-3 text-slate-500 hover:text-primary" />
+                    </Button>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    Using: {shortenAddress(aaAddress)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pt-2">
             <div className="flex-1 w-full">
               {!isDeployed ? (
@@ -184,36 +245,11 @@ export default function AAWallet() {
                 </div>
               )}
             </div>
-
-            {isDeployed && (
-              <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-lg border border-slate-200 w-full sm:w-auto">
-                <div>
-                  <div className="text-xs font-medium text-slate-500 mb-1">Balance</div>
-                  <div className="flex items-center gap-2">
-                    {isBalanceLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-                    ) : (
-                      <span className="font-semibold text-lg">{parseFloat(balance).toFixed(4)}</span>
-                    )}
-                    <span className="text-slate-600">ETH</span>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-6 w-6 p-0" 
-                      onClick={fetchBalance}
-                      title="Refresh balance"
-                    >
-                      <RefreshCw className="h-3 w-3 text-slate-500 hover:text-primary" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
 
-      {isDeployed && (
+      {(isDeployed || addressMode === 'eoa') && (
         <Tabs defaultValue="transactions" className="w-full space-y-6">
           <TabsList className="grid w-full grid-cols-4 bg-slate-100 p-1">
             <TabsTrigger value="transactions" className="data-[state=active]:bg-white">
@@ -236,29 +272,41 @@ export default function AAWallet() {
 
           <TabsContent value="transactions" className="space-y-4 mt-6">
             <SendTransaction 
-              isDeployed={isDeployed} 
+              isActive={isDeployed || addressMode === 'eoa'} 
               onTransactionComplete={fetchBalance} 
+              activeAddress={aaAddress}
+              addressMode={addressMode}
             />
           </TabsContent>
 
           <TabsContent value="wrap" className="space-y-4 mt-6">
-            <WrapToken isDeployed={isDeployed} />
+            <WrapToken 
+              isActive={isDeployed || addressMode === 'eoa'} 
+              activeAddress={aaAddress}
+              addressMode={addressMode}
+            />
           </TabsContent>
 
           <TabsContent value="create" className="space-y-4 mt-6">
-            <TokenCreation isDeployed={isDeployed} />
+            <TokenCreation 
+              isActive={isDeployed || addressMode === 'eoa'}
+              activeAddress={aaAddress}
+              addressMode={addressMode}
+            />
           </TabsContent>
 
           <TabsContent value="swap" className="space-y-4 mt-6">
             <Swap
-              isDeployed={isDeployed} 
+              isActive={isDeployed || addressMode === 'eoa'} 
               onSwapComplete={fetchBalance}
+              activeAddress={aaAddress}
+              addressMode={addressMode}
             />
           </TabsContent>
         </Tabs>
       )}
 
-      {!isDeployed && (
+      {!isDeployed && addressMode === 'aa' && (
         <Card className="bg-slate-50 border-slate-200 shadow-sm">
           <CardContent className="p-6">
             <div className="flex flex-col items-center justify-center text-center space-y-4 py-6">
