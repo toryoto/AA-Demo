@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PublicClient, formatEther, Hex, isAddress, encodeFunctionData, parseEther } from 'viem';
+import { PublicClient, Hex, isAddress, encodeFunctionData, parseEther, formatUnits } from 'viem';
 import { erc20Abi } from '../abi/erc20';
 import { SimpleAccountABI } from '../abi/simpleAccount';
 import { toast } from 'sonner';
@@ -65,10 +65,17 @@ export const useTokenManagement = (publicClient: PublicClient, aaAddress: Hex) =
               functionName: 'balanceOf',
               args: [aaAddress]
             });
-            
+  
+            const decimals = await publicClient.readContract({
+              address: token.address as `0x${string}`,
+              abi: erc20Abi,
+              functionName: 'decimals'
+            });
+  
+            const formattedBalance = formatUnits(balance as bigint, decimals as number);
             return {
               ...token,
-              balance: formatEther(balance as bigint)
+              balance: formattedBalance
             };
           } catch (error) {
             console.error(`Error fetching balance for token ${token.address}:`, error);
@@ -125,11 +132,19 @@ export const useTokenManagement = (publicClient: PublicClient, aaAddress: Hex) =
         })
       ]);
 
+      const decimals = await publicClient.readContract({
+        address: tokenAddress as `0x${string}`,
+        abi: erc20Abi,
+        functionName: 'decimals'
+      });
+  
+      const formattedBalance = formatUnits(balance as bigint, decimals as number);
+  
       const newToken = {
         address: tokenAddress,
         name: name as string,
         symbol: symbol as string,
-        balance: formatEther(balance as bigint)
+        balance: formattedBalance
       };
 
       const updatedTokens = [...tokens, newToken];
