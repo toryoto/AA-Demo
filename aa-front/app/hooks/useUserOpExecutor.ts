@@ -1,3 +1,4 @@
+// hooks/useUserOpExecutor.ts
 import { useState, useCallback } from 'react';
 import { Hex } from 'viem';
 import { bundlerClient } from '../utils/client';
@@ -22,18 +23,12 @@ interface ExecuteResult {
   error?: string;
 }
 
-
 export function useUserOperationExecutor(aaAddress: Hex) {
   const [isProcessing, setIsProcessing] = useState(false);
   const { createUserOperation } = useUserOperation();
   const { getPaymasterAndData } = usePaymasterData();
   const { execute } = useExecuteUserOperation();
-  /**
-   * callData から UserOperation を作成して実行する
-   * @param callData 実行するコントラクト関数のコールデータ
-   * @param options 実行オプション
-   * @returns 実行結果
-   */
+
   const executeCallData = useCallback(async (
     callData: Hex,
     options: ExecuteOptions = {}

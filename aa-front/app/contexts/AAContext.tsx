@@ -6,11 +6,15 @@ import { FACTORY_ADDRESS } from '../constants/addresses';
 import { publicClient } from '../utils/client';
 import { useUserOperationExecutor } from '../hooks/useUserOpExecutor';
 
+export type AddressMode = 'aa' | 'eoa';
+
 interface AAContextType {
   aaAddress: Hex;
   isDeployed: boolean;
   loading: boolean;
   deployAccount: () => Promise<void>;
+  addressMode: AddressMode;
+  setAddressMode: (mode: AddressMode) => void;
 }
 
 export const AAContext = createContext<AAContextType | undefined>(undefined);
@@ -21,8 +25,8 @@ export function AAProvider({ children }: { children: ReactNode }) {
   const [aaAddress, setAaAddress] = useState<Hex>('0x');
   const [isDeployed, setIsDeployed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [addressMode, setAddressMode] = useState<AddressMode>('aa');
   const { executeCallData } = useUserOperationExecutor(aaAddress);
-
 
   useEffect(() => {
     const initializeAA = async () => {
@@ -30,6 +34,13 @@ export function AAProvider({ children }: { children: ReactNode }) {
       
       setLoading(true);
       try {
+        if (addressMode === 'eoa') {
+          setAaAddress(address);
+          setIsDeployed(true);
+          setLoading(false);
+          return;
+        }
+
         const factory = getContract({
           address: FACTORY_ADDRESS,
           abi: accountFactoryAbi,
@@ -51,10 +62,16 @@ export function AAProvider({ children }: { children: ReactNode }) {
     };
 
     initializeAA();
-  }, [walletClient, address]);
+  }, [walletClient, address, addressMode]);
 
   const deployAccount = async () => {
-    if (!address || !walletClient || !aaAddress) return
+    if (!address || !walletClient || !aaAddress) return;
+    
+    if (addressMode === 'eoa') {
+      setIsDeployed(true);
+      return;
+    }
+    
     try {
       const initCode = concat([
         FACTORY_ADDRESS,
@@ -63,17 +80,24 @@ export function AAProvider({ children }: { children: ReactNode }) {
           functionName: 'createAccount',
           args: [address, 0]
         })
-      ])
-      await executeCallData('0x', { initCode })
-      setIsDeployed(true)
-      return
+      ]);
+      await executeCallData('0x', { initCode });
+      setIsDeployed(true);
+      return;
     } catch (error) {
-      console.error('Deploy error:', error)
+      console.error('Deploy error:', error);
     }
-  }
+  };
 
   return (
-    <AAContext.Provider value={{ aaAddress, isDeployed, loading, deployAccount }}>
+    <AAContext.Provider value={{ 
+      aaAddress, 
+      isDeployed, 
+      loading, 
+      deployAccount,
+      addressMode,
+      setAddressMode,
+    }}>
       {children}
     </AAContext.Provider>
   );
