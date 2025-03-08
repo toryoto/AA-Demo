@@ -2,7 +2,7 @@ import { encodeFunctionData, Hex, parseUnits, formatUnits } from "viem"
 import { SimpleAccountABI } from "../abi/simpleAccount"
 import { publicClient } from "../utils/client"
 import { useUserOperationExecutor } from "./useUserOpExecutor"
-import { DAI_ADDRESS, JPYC_ADDRESS, UNISWAP_FACTORY_ADDRESS, UNISWAP_ROUTER_ADDRESS, USDC_ADDRESS, WRAPPED_SEPOLIA_ADDRESS } from "../constants/addresses"
+import { DAI_ADDRESS, JPYT_ADDRESS, UNISWAP_FACTORY_ADDRESS, UNISWAP_ROUTER_ADDRESS, USDC_ADDRESS, WRAPPED_SEPOLIA_ADDRESS } from "../constants/addresses"
 import { erc20Abi } from "../abi/erc20"
 import { dexRouterAbi } from "../abi/dexRouter"
 import { wrappedSepolia } from "../abi/wrappedSepolia"
@@ -26,7 +26,7 @@ const TOKEN_DECIMALS: Record<string, number> = {
   [USDC_ADDRESS]: 6,
   [DAI_ADDRESS]: 18,
   [WRAPPED_SEPOLIA_ADDRESS]: 18,
-  [JPYC_ADDRESS]: 6,
+  [JPYT_ADDRESS]: 6,
   'SEP': 18,
 };
 

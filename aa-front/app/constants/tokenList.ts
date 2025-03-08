@@ -1,4 +1,4 @@
-import { DAI_ADDRESS, JPYC_ADDRESS, USDC_ADDRESS, WRAPPED_SEPOLIA_ADDRESS } from "./addresses";
+import { DAI_ADDRESS, JPYT_ADDRESS, USDC_ADDRESS, WRAPPED_SEPOLIA_ADDRESS } from "./addresses";
 
 export interface TokenOption {
   symbol: string;
@@ -36,7 +36,7 @@ export const TOKEN_OPTIONS: TokenOption[] = [
   { 
     symbol: 'JPYT', 
     name: 'JPT Coin', 
-    address: JPYC_ADDRESS, 
+    address: JPYT_ADDRESS, 
     logo: 'https://jpyc.jp/static/media/jpycPrepaidSymbol.46f34eb68974b2165b1ecf4a7357756c.svg' 
   }
 ];
