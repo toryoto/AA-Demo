@@ -286,18 +286,18 @@ export default function AAWallet() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="transactions" className="space-y-4 mt-6">
+          {/* <TabsContent value="transactions" className="space-y-4 mt-6">
             <SendTransaction 
               isDeployed={isDeployed} 
               onTransactionComplete={fetchBalance} 
             />
-          </TabsContent>
+          </TabsContent> */}
 
           <TabsContent value="wrap" className="space-y-4 mt-6">
             <WrapToken isDeployed={isDeployed} />
           </TabsContent>
 
-          <TabsContent value="create" className="space-y-4 mt-6">
+          {/* <TabsContent value="create" className="space-y-4 mt-6">
             <TokenCreation isDeployed={isDeployed} />
           </TabsContent>
 
@@ -306,7 +306,7 @@ export default function AAWallet() {
               isDeployed={isDeployed} 
               onSwapComplete={fetchBalance}
             />
-          </TabsContent>
+          </TabsContent> */}
         </Tabs>
       )}
 

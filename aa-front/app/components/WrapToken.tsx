@@ -44,7 +44,7 @@ export const WrapToken = ({
   const [activeTab, setActiveTab] = useState<'wrap' | 'unwrap'>('wrap');
   const [txStatus, setTxStatus] = useState<{status: 'success' | 'error', message: string} | null>(null);
 
-  const { aaAddress } = useAA()
+  const { aaAddress } = useAA();
 
   const {
     deposit,
