@@ -31,11 +31,20 @@ import {
 } from './ui/tooltip';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
+import { useWalletClient } from 'wagmi';
+import { Hex } from 'viem';
+import { AddressMode } from '../contexts/AAContext';
+import { WRAPPED_SEPOLIA_ADDRESS } from '../constants/addresses';
+import { publicClient } from '../utils/client';
 
 export const WrapToken = ({ 
-  isDeployed,
+  isActive,
+  activeAddress,
+  addressMode,
 }: { 
-  isDeployed: boolean;
+  isActive: boolean;
+  activeAddress: Hex;
+  addressMode: AddressMode;
 }) => {
   const [wrapAmount, setWrapAmount] = useState('');
   const [unwrapAmount, setUnwrapAmount] = useState('');
@@ -43,29 +52,106 @@ export const WrapToken = ({
   const [balance, setBalance] = useState('0');
   const [activeTab, setActiveTab] = useState<'wrap' | 'unwrap'>('wrap');
   const [txStatus, setTxStatus] = useState<{status: 'success' | 'error', message: string} | null>(null);
-
-  const { aaAddress } = useAA()
+  
+  const { aaAddress } = useAA();
+  const { data: walletClient } = useWalletClient();
 
   const {
-    deposit,
-    withdraw,
+    deposit: aaDeposit,
+    withdraw: aaWithdraw,
     balanceOf
   } = useWrapSepolia(aaAddress);
 
+  // Reset form when address mode changes
+  useEffect(() => {
+    setWrapAmount('');
+    setUnwrapAmount('');
+    setTxStatus(null);
+    updateBalance();
+  }, [addressMode, activeAddress]);
+
   const updateBalance = useCallback(async () => {
-    if (isDeployed && aaAddress) {
+    if (isActive && activeAddress) {
       try {
-        const bal = await balanceOf();
+        let bal;
+        if (addressMode === 'aa') {
+          bal = await balanceOf();
+        } else {
+          bal = await publicClient.readContract({
+            address: WRAPPED_SEPOLIA_ADDRESS,
+            abi: [{
+              name: 'balanceOf',
+              type: 'function',
+              stateMutability: 'view',
+              inputs: [{ name: 'account', type: 'address' }],
+              outputs: [{ name: '', type: 'uint256' }]
+            }],
+            functionName: 'balanceOf',
+            args: [activeAddress]
+          }) as bigint;
+        }
         setBalance(formatEther(bal));
       } catch (error) {
         console.error('Error fetching balance:', error);
       }
     }
-  }, [isDeployed, aaAddress, balanceOf]);
+  }, [isActive, activeAddress, addressMode, balanceOf]);
 
   useEffect(() => {
     updateBalance();
   }, [updateBalance]);
+
+  // EOAモードでのデポジット
+  const eoaDeposit = async (amount: string) => {
+    if (!walletClient || !activeAddress) {
+      throw new Error('Wallet client not available');
+    }
+
+    const tx = await walletClient.writeContract({
+      address: WRAPPED_SEPOLIA_ADDRESS,
+      abi: [{
+        name: 'deposit',
+        type: 'function',
+        stateMutability: 'payable',
+        inputs: [],
+        outputs: []
+      }],
+      functionName: 'deposit',
+      value: BigInt(parseFloat(amount) * 10**18)
+    });
+
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: tx });
+    return {
+      success: receipt.status === 'success',
+      hash: receipt.transactionHash
+    };
+  };
+
+  // EOAモードでの引き出し
+  const eoaWithdraw = async (amount: string) => {
+    if (!walletClient || !activeAddress) {
+      throw new Error('Wallet client not available');
+    }
+
+    const tx = await walletClient.writeContract({
+      address: WRAPPED_SEPOLIA_ADDRESS,
+      abi: [{
+        name: 'withdraw',
+        type: 'function',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: 'wad', type: 'uint256' }],
+        outputs: []
+      }],
+      functionName: 'withdraw',
+      args: [BigInt(parseFloat(amount) * 10**18)]
+    });
+
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: tx });
+    return {
+      success: receipt.status === 'success',
+      hash: receipt.transactionHash
+    };
+  };
 
   const handleWrap = async () => {
     if (!wrapAmount || parseFloat(wrapAmount) <= 0) {
@@ -79,7 +165,14 @@ export const WrapToken = ({
     setTxStatus(null);
 
     try {
-      const result = await deposit(wrapAmount);
+      let result;
+      
+      if (addressMode === 'eoa') {
+        result = await eoaDeposit(wrapAmount);
+      } else {
+        result = await aaDeposit(wrapAmount);
+      }
+      
       if (result.success) {
         setTxStatus({
           status: 'success',
@@ -88,7 +181,7 @@ export const WrapToken = ({
         setWrapAmount('');
         await updateBalance();
       } else {
-        throw new Error(result.error);
+        throw new Error('Transaction failed');
       }
     } catch (error) {
       setTxStatus({
@@ -119,7 +212,14 @@ export const WrapToken = ({
     setTxStatus(null);
 
     try {
-      const result = await withdraw(unwrapAmount);
+      let result;
+      
+      if (addressMode === 'eoa') {
+        result = await eoaWithdraw(unwrapAmount);
+      } else {
+        result = await aaWithdraw(unwrapAmount);
+      }
+      
       if (result.success) {
         setTxStatus({
           status: 'success',
@@ -128,7 +228,7 @@ export const WrapToken = ({
         setUnwrapAmount('');
         await updateBalance();
       } else {
-        throw new Error(result.error);
+        throw new Error('Transaction failed');
       }
     } catch (error) {
       setTxStatus({
@@ -140,7 +240,7 @@ export const WrapToken = ({
     }
   };
 
-  if (!isDeployed) return null;
+  if (!isActive) return null;
 
   return (
     <Card className="border-slate-200 shadow-sm overflow-hidden">
@@ -151,26 +251,14 @@ export const WrapToken = ({
             <CardTitle className="text-lg font-bold">Wrap/Unwrap ETH</CardTitle>
           </div>
           
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex items-center gap-1 bg-slate-100 px-3 py-1 rounded-full">
-                  <span className="text-sm font-medium text-slate-800">Balance: {parseFloat(balance).toFixed(4)} WSEP</span>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    className="h-6 w-6 rounded-full p-0 text-slate-500 hover:text-primary hover:bg-slate-200" 
-                    onClick={updateBalance}
-                  >
-                    <RefreshCw className="h-3 w-3" />
-                  </Button>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-sm">Your Wrapped Sepolia ETH balance</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <div className="flex items-center gap-2">
+            {addressMode === 'aa' && (
+              <Badge className="bg-primary text-white">Smart Account Mode</Badge>
+            )}
+            {addressMode === 'eoa' && (
+              <Badge className="bg-slate-700 text-white">EOA Mode</Badge>
+            )}
+          </div>
         </div>
         <CardDescription className="text-sm text-slate-500 mt-1">
           Convert between ETH and Wrapped Sepolia ETH (WSEP)
@@ -211,6 +299,27 @@ export const WrapToken = ({
             </div>
           </Alert>
         )}
+
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1 bg-slate-100 px-3 py-1 rounded-full">
+                <span className="text-sm font-medium text-slate-800">Balance: {parseFloat(balance).toFixed(4)} WSEP</span>
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  className="h-6 w-6 rounded-full p-0 text-slate-500 hover:text-primary hover:bg-slate-200" 
+                  onClick={updateBalance}
+                >
+                  <RefreshCw className="h-3 w-3" />
+                </Button>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="text-sm">Your Wrapped Sepolia ETH balance</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         {activeTab === 'wrap' ? (
           <div className="space-y-4">
