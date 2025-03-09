@@ -13,6 +13,7 @@ Implementation of contracts for [ERC-4337](https://eips.ethereum.org/EIPS/eip-43
 # Deployed Address
 ```
 EntryPoint: 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789
+SimpleAccount: 0x33f112dc4994b9D9C59C22bCb46c7939Ad6E7290
 FactoryAccount: 0x101DA2ce5A5733BAbc1956a71C5d640c8E6a113d
 Paymaster: 0x415b4ceC5cf512CeDBE09C12081A0b75E13854Ff
 ```
