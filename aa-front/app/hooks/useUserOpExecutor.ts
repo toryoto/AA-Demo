@@ -1,7 +1,9 @@
 import { useState, useCallback } from 'react';
-import { Hex } from 'viem';
-import { bundlerClient } from '../utils/client';
-import useUserOperation from './useUserOperation';
+import { Hex, toHex } from 'viem';
+import { bundlerClient, publicClient } from '../utils/client';
+import { ENTRY_POINT_ADDRESS } from '../constants/addresses';
+import { entryPointAbi } from '../abi/entryPoint';
+import { UserOperation } from '../lib/userOperationType';
 import { usePaymasterData } from './usePaymasterData';
 import { useExecuteUserOperation } from './useExecuteUserOperation';
 
@@ -22,14 +24,60 @@ interface ExecuteResult {
   error?: string;
 }
 
-
 export function useUserOperationExecutor(aaAddress: Hex) {
   const [isProcessing, setIsProcessing] = useState(false);
-  const { createUserOperation } = useUserOperation();
   const { getPaymasterAndData } = usePaymasterData();
   const { execute } = useExecuteUserOperation();
+
   /**
-   * callData から UserOperation を作成して実行する
+   * UserOperation を作成するメソッド
+   * @param aaAddress
+   * @param initCode
+   * @param callData
+   * @returns UserOperation
+   */
+  const createUserOperation = useCallback(async ({ 
+    aaAddress, 
+    initCode = '0x', 
+    callData = '0x' 
+  }: { 
+    aaAddress: Hex, 
+    initCode?: Hex, 
+    callData?: Hex 
+  }): Promise<UserOperation> => {
+    try {
+      const nonce = await publicClient.readContract({
+        address: ENTRY_POINT_ADDRESS,
+        abi: entryPointAbi,
+        functionName: 'getNonce',
+        args: [aaAddress, BigInt(0)],
+      }) as bigint;
+      
+      if (nonce === null) {
+        throw new Error('Nonce is not fetched yet.');
+      }
+
+      return {
+        sender: aaAddress,
+        nonce: toHex(nonce),
+        initCode,
+        callData,
+        callGasLimit: toHex(3_000_000),
+        verificationGasLimit: toHex(3_000_000),
+        preVerificationGas: toHex(3_000_000),
+        maxFeePerGas: toHex(2_000_000_000),
+        maxPriorityFeePerGas: toHex(2_000_000_000),
+        paymasterAndData: '0x',
+        signature: '0x',
+      };
+    } catch (error) {
+      console.error('Error fetching nonce:', error);
+      throw error; 
+    }
+  }, []);
+
+  /**
+   * callData から UserOperation を作成して実行するメソッド
    * @param callData 実行するコントラクト関数のコールデータ
    * @param options 実行オプション
    * @returns 実行結果
@@ -99,6 +147,7 @@ export function useUserOperationExecutor(aaAddress: Hex) {
 
   return {
     executeCallData,
+    createUserOperation,
     isProcessing,
   };
 }
