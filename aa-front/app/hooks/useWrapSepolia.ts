@@ -11,8 +11,8 @@ interface TransactionResult {
   error?: string
 }
 
-export function useWrapSepolia(aaAddress: Hex) {
-  const { executeCallData } = useUserOperationExecutor(aaAddress);
+export function useWrapSepolia(aaAddress: Hex, addressMode: 'aa' | 'eoa') {
+  const { executeCallData } = useUserOperationExecutor(aaAddress, addressMode);
 
   const deposit = async (amount: string): Promise<TransactionResult> => {
     try {

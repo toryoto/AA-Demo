@@ -1,15 +1,14 @@
 import { useState, useCallback } from 'react';
 import { createWalletClient, Hex, http } from 'viem';
-import { bundlerClient } from '../utils/client';
+import { bundlerClient, publicClient } from '../utils/client';
 import useUserOperation from './useUserOperation';
 import { usePaymasterData } from './usePaymasterData';
 import { useExecuteUserOperation } from './useExecuteUserOperation';
-import { useAA } from './useAA';
 import { ENTRY_POINT_ADDRESS, SIMPLE_ACCOUNT_ADDRESS } from '../constants/addresses';
 import { entryPointAbi } from '../abi/entryPoint';
-import { privateKeyToAccount } from 'viem/accounts';
+import { privateKeyToAccount, nonceManager } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { useEip7702Provider } from './useEip7702Provider';
+import { eip7702Actions } from 'viem/experimental';
 
 interface ExecuteOptions {
   initCode?: Hex;
@@ -29,13 +28,11 @@ interface ExecuteResult {
 }
 
 
-export function useUserOperationExecutor(aaAddress: Hex) {
+export function useUserOperationExecutor(aaAddress: Hex, addressMode: 'aa' | 'eoa') {
   const [isProcessing, setIsProcessing] = useState(false);
   const { createUserOperation } = useUserOperation();
   const { getPaymasterAndData } = usePaymasterData();
   const { execute } = useExecuteUserOperation();
-  const { addressMode } = useAA();
-  const { walletClient } = useEip7702Provider()
 
   /**
    * callData から UserOperation を作成して実行する
@@ -61,56 +58,92 @@ export function useUserOperationExecutor(aaAddress: Hex) {
 
     setIsProcessing(true);
 
-    if (addressMode == 'eoa') {
-      const userOp = await createUserOperation({ 
-        aaAddress, 
-        callData,
-        initCode 
-      });
+    if (addressMode === 'eoa') {
+      try {
+        const userOp = await createUserOperation({ 
+          aaAddress, 
+          callData,
+          initCode 
+        });
 
-      if (customPaymasterAndData) {
-        userOp.paymasterAndData = customPaymasterAndData;
-      } else if (usePaymaster) {
-        const paymasterAndData = await getPaymasterAndData(userOp);
-        userOp.paymasterAndData = paymasterAndData;
-      }
+        if (customPaymasterAndData) {
+          userOp.paymasterAndData = customPaymasterAndData;
+        } else if (usePaymaster) {
+          const paymasterAndData = await getPaymasterAndData(userOp);
+          userOp.paymasterAndData = paymasterAndData;
+        }
 
-      const authorization = await walletClient.signAuthorization({
-        contractAddress: SIMPLE_ACCOUNT_ADDRESS,
-        delegate: true,
-      });
-
-      const bundler = privateKeyToAccount(
-        ''
-      );
+        const account = privateKeyToAccount('');
     
-      const bundlerWalletClient = createWalletClient({
-        account: bundler,
-        chain: sepolia,
-        transport: http(`https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`)
-      });
+        const walletClient = createWalletClient({
+          chain: sepolia,
+          account: privateKeyToAccount(''),
+          transport: http(`https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`),
+        }).extend(eip7702Actions());
+        
 
-      const beneficiary = bundler.address;
+        const authorizatio = await walletClient.signAuthorization({
+          contractAddress: SIMPLE_ACCOUNT_ADDRESS,
+          delegate: true,
+        });
 
-      const hash = await bundlerWalletClient.writeContract({
-        address: ENTRY_POINT_ADDRESS,
-        abi: entryPointAbi,
-        functionName: 'handleOps',
-        account: bundler,
-        args: [
-          userOp,
-          beneficiary,
-        ],
-        authorizationList: [authorization],
-      }) ;
+        const authorization = await account.experimental_signAuthorization(
+          authorizatio
+        );
 
-      console.log(hash)
+        const bundler = privateKeyToAccount(
+          ''
+        , {nonceManager});
 
+        const bundlerWalletClient = createWalletClient({
+          account: bundler,
+          chain: sepolia,
+          transport: http(`https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`),
+        });
+        
 
-      return {
-        success: true,
-        userOpHash: hash,
-      };
+        const beneficiary = bundler.address;
+
+        const args = [
+          [userOp],
+          beneficiary
+        ];
+
+        const hash = await bundlerWalletClient.writeContract({
+          address: ENTRY_POINT_ADDRESS,
+          abi: entryPointAbi,
+          functionName: 'handleOps',
+          account: bundler,
+          args: [
+            [userOp].map(usrOp => ({
+              ...usrOp,
+              callGasLimit: BigInt(usrOp.callGasLimit),
+              verificationGasLimit: BigInt(usrOp.verificationGasLimit),
+              preVerificationGas: BigInt(usrOp.preVerificationGas),
+            })),
+            beneficiary, // beneficiaryを追加
+          ],
+          maxFeePerGas: BigInt('1000000000'), // 1 Gwei
+          maxPriorityFeePerGas: BigInt('500000000'), // 0.5 Gwei
+          gas: BigInt('500000'),
+          authorizationList: [authorization], // authorizationListを追加
+        });
+
+        console.log(hash);
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        console.log(receipt);
+
+        return {
+          success: true,
+          userOpHash: hash,
+        };
+      } catch (error) {
+        console.error('EOA execution error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error occurred'
+        };
+      }
     }
 
     try {

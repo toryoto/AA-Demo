@@ -44,13 +44,13 @@ export const WrapToken = ({
   const [activeTab, setActiveTab] = useState<'wrap' | 'unwrap'>('wrap');
   const [txStatus, setTxStatus] = useState<{status: 'success' | 'error', message: string} | null>(null);
 
-  const { aaAddress } = useAA();
+  const { aaAddress, addressMode } = useAA();
 
   const {
     deposit,
     withdraw,
     balanceOf
-  } = useWrapSepolia(aaAddress);
+  } = useWrapSepolia(aaAddress, addressMode);
 
   const updateBalance = useCallback(async () => {
     if (isDeployed && aaAddress) {
