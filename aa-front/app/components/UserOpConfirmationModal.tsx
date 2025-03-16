@@ -47,7 +47,7 @@ interface DecodedCallData {
   operations: DecodedOperation[];
 }
 
-const KNOWN_ABIS = [
+const ABIS = [
   ...SimpleAccountABI,
   ...erc20Abi,
   ...dexRouterAbi,
@@ -59,39 +59,28 @@ function decodeSingleCallData(callData: Hex): DecodedSingleCallData {
     return { functionName: 'Unknown', args: [] };
   }
 
-  try {
-    for (const abiItem of KNOWN_ABIS) {
-      if (abiItem.type !== 'function') continue;
+  for (const abi of ABIS) {
+    try {
+      // calldataとabiを引数にデコードすることで元の情報を取得する
+      const decoded = decodeFunctionData({
+        abi: [abi],
+        data: callData
+      });
       
-      try {
-        const decoded = decodeFunctionData({
-          abi: [abiItem],
-          data: callData
-        });
-        
-        if (decoded) {
-          return {
-            functionName: abiItem.name || 'Unknown',
-            args: Array.isArray(decoded.args) ? decoded.args : []
-          };
-        }
-      } catch {
-        // Continue trying other ABIs
+      if (decoded) {
+        return {
+          functionName: abi.name || 'Unknown',
+          args: Array.isArray(decoded.args) ? decoded.args : []
+        };
       }
-    }
-    
-    return {
-      functionName: 'Unknown',
-      args: [],
-      callData
-    };
-  } catch {
-    return {
-      functionName: 'Unknown',
-      args: [],
-      callData
-    };
+    } catch {}
   }
+  
+  return {
+    functionName: 'Unknown',
+    args: [],
+    callData
+  };
 }
 
 function decodeCallData(callData: Hex): DecodedCallData {
@@ -101,26 +90,41 @@ function decodeCallData(callData: Hex): DecodedCallData {
 
   try {
     // Try to decode with known ABIs
-    for (const abiItem of KNOWN_ABIS) {
-      if (abiItem.type !== 'function') continue;
+    for (const abi of ABIS) {
+      if (abi.type !== 'function') continue;
       
       try {
         const decoded = decodeFunctionData({
-          abi: [abiItem],
+          abi: [abi],
           data: callData
         });
         
         if (decoded) {
-          // If this is a SimpleAccount execute function
-          if (abiItem.name === 'execute' && decoded.args && decoded.args.length >= 3) {
+          if (abi.name === 'execute' && decoded.args && decoded.args.length >= 3) {
             const dest = decoded.args[0] as string;
             const value = decoded.args[1] as bigint;
             const innerCallData = decoded.args[2] as Hex;
             
-            // Try to decode the inner transaction
+            if (innerCallData === '0x') {
+              return {
+                functionName: 'execute',
+                contractAddress: dest,
+                value,
+                args: [dest, value, innerCallData],
+                operations: [
+                  {
+                    functionName: 'ETH Transfer',
+                    contractAddress: dest,
+                    value: value,
+                    args: []
+                  }
+                ]
+              };
+            }
+            
             let innerOperation: DecodedSingleCallData | null = null;
             
-            if (innerCallData && innerCallData.length >= 10 && innerCallData !== '0x') {
+            if (innerCallData && innerCallData.length >= 10) {
               innerOperation = decodeSingleCallData(innerCallData);
             }
             
@@ -133,20 +137,29 @@ function decodeCallData(callData: Hex): DecodedCallData {
                 {
                   functionName: innerOperation ? innerOperation.functionName : 'Unknown',
                   contractAddress: dest,
+                  value: value,
                   args: innerOperation ? innerOperation.args : []
                 }
               ]
             };
           }
           
-          // executeBatch function with (address[] dest, uint256[] value, bytes[] func)
-          if (abiItem.name === 'executeBatch' && decoded.args && decoded.args.length >= 3) {
+          if (abi.name === 'executeBatch' && decoded.args && decoded.args.length >= 3) {
             const destinations = decoded.args[0] as string[];
             const values = decoded.args[1] as bigint[];
             const datas = decoded.args[2] as Hex[];
             
             // Decode each inner transaction
             const operations = datas.map((data, index) => {
+              if (data === '0x') {
+                return {
+                  functionName: 'ETH Transfer',
+                  contractAddress: destinations[index],
+                  value: values[index],
+                  args: []
+                };
+              }
+              
               const decodedInner = decodeSingleCallData(data);
               return {
                 functionName: decodedInner.functionName,
@@ -158,21 +171,12 @@ function decodeCallData(callData: Hex): DecodedCallData {
             
             return {
               functionName: 'executeBatch',
-              args: decoded.args,
+              args: [...(decoded.args || [])],
               operations
             };
           }
-          
-          // Return decoded data for any other function
-          return {
-            functionName: abiItem.name || 'Unknown',
-            args: Array.isArray(decoded.args) ? decoded.args : [],
-            operations: []
-          };
         }
-      } catch (e) {
-        // Continue trying other ABIs
-      }
+      } catch {}
     }
     
     // If decoding failed, return the raw calldata
@@ -209,6 +213,7 @@ export const UserOpConfirmationModal: React.FC<UserOpConfirmationModalProps> = (
 
   if (!callData || !decodedData) return null;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const formatArgsForDisplay = (args: any[]): string => {
     try {
       return JSON.stringify(args, (key, value) => 
@@ -216,6 +221,21 @@ export const UserOpConfirmationModal: React.FC<UserOpConfirmationModalProps> = (
     } catch {
       return '[Error displaying arguments]';
     }
+  };
+
+  // formatEth: ETH値をより読みやすい形式に変換する関数
+  const formatEth = (value: bigint | undefined): string => {
+    if (!value) return '0 ETH';
+    
+    // weiからETHに変換（1 ETH = 10^18 wei）
+    const ethValue = Number(value) / 1e18;
+    
+    // 適切な小数点以下の桁数でフォーマット
+    if (ethValue < 0.000001) {
+      return `${value.toString()} wei`;
+    }
+    
+    return `${ethValue.toFixed(6)} ETH`;
   };
 
   return (
@@ -244,49 +264,30 @@ export const UserOpConfirmationModal: React.FC<UserOpConfirmationModalProps> = (
                         <span className="text-xs font-medium">{index + 1}. {op.functionName}</span>
                         {op.value && op.value > BigInt(0) && (
                           <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                            {op.value.toString()} wei
+                            {formatEth(op.value)}
                           </span>
                         )}
                       </div>
                       {op.contractAddress && (
                         <div className="mb-1">
-                          <span className="text-xs text-slate-500">Contract: </span>
+                          <span className="text-xs text-slate-500">To: </span>
                           <span className="text-xs font-mono break-all">{op.contractAddress}</span>
                         </div>
                       )}
-                      <div className="mt-1">
-                        <details className="text-xs">
-                          <summary className="cursor-pointer hover:text-blue-600">View arguments</summary>
-                          <div className="mt-1 bg-slate-100 p-2 rounded text-xs font-mono overflow-x-auto">
-                            <pre className="whitespace-pre-wrap break-all">{formatArgsForDisplay(op.args)}</pre>
-                          </div>
-                        </details>
-                      </div>
+                      {op.args.length > 0 && (
+                        <div className="mt-1">
+                          <details className="text-xs">
+                            <summary className="cursor-pointer hover:text-blue-600">View arguments</summary>
+                            <div className="mt-1 bg-slate-100 p-2 rounded text-xs font-mono overflow-x-auto">
+                              <pre className="whitespace-pre-wrap break-all">{formatArgsForDisplay(op.args)}</pre>
+                            </div>
+                          </details>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
-            )}
-            
-            {/* Only show raw arguments if there are no operations */}
-            {(!decodedData.operations || decodedData.operations.length === 0) && (
-              <>
-                {/* Contract address if available */}
-                {decodedData.contractAddress && (
-                  <div className="mb-3">
-                    <span className="text-sm font-medium">Contract: </span>
-                    <span className="text-sm font-mono break-all">{decodedData.contractAddress}</span>
-                  </div>
-                )}
-                
-                {/* Arguments */}
-                <div className="mb-2">
-                  <span className="text-sm font-medium">Arguments:</span>
-                </div>
-                <div className="bg-slate-100 p-2 rounded text-xs font-mono overflow-x-auto">
-                  <pre className="whitespace-pre-wrap break-all">{formatArgsForDisplay(decodedData.args)}</pre>
-                </div>
-              </>
             )}
           </div>
         </div>
