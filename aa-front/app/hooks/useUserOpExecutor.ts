@@ -6,6 +6,7 @@ import { entryPointAbi } from '../abi/entryPoint';
 import { UserOperation } from '../lib/userOperationType';
 import { usePaymasterData } from './usePaymasterData';
 import { useExecuteUserOperation } from './useExecuteUserOperation';
+import { useUserOpConfirmation } from '../contexts/UserOpConfirmationContext';
 
 interface ExecuteOptions {
   initCode?: Hex;
@@ -13,6 +14,7 @@ interface ExecuteOptions {
   timeout?: number;
   usePaymaster?: boolean;
   customPaymasterAndData?: Hex;
+  skipConfirmation?: boolean;
 }
 
 interface ExecuteResult {
@@ -28,13 +30,10 @@ export function useUserOperationExecutor(aaAddress: Hex) {
   const [isProcessing, setIsProcessing] = useState(false);
   const { getPaymasterAndData } = usePaymasterData();
   const { execute } = useExecuteUserOperation();
+  const { confirmUserOp } = useUserOpConfirmation();
 
   /**
    * UserOperation を作成するメソッド
-   * @param aaAddress
-   * @param initCode
-   * @param callData
-   * @returns UserOperation
    */
   const createUserOperation = useCallback(async ({ 
     aaAddress, 
@@ -77,12 +76,9 @@ export function useUserOperationExecutor(aaAddress: Hex) {
   }, []);
 
   /**
-   * callData から UserOperation を作成して実行するメソッド
-   * @param callData 実行するコントラクト関数のコールデータ
-   * @param options 実行オプション
-   * @returns 実行結果
+   * 実際のUserOp実行処理を行う内部関数
    */
-  const executeCallData = useCallback(async (
+  const performExecution = useCallback(async (
     callData: Hex,
     options: ExecuteOptions = {}
   ): Promise<ExecuteResult> => {
@@ -93,7 +89,7 @@ export function useUserOperationExecutor(aaAddress: Hex) {
       usePaymaster = true,
       customPaymasterAndData
     } = options;
-    
+
     if (!aaAddress || aaAddress === '0x') {
       return { success: false, error: 'Smart account address not available' };
     }
@@ -144,6 +140,25 @@ export function useUserOperationExecutor(aaAddress: Hex) {
       setIsProcessing(false);
     }
   }, [aaAddress, createUserOperation, getPaymasterAndData, execute]);
+
+  const executeCallData = useCallback(async (
+    callData: Hex,
+    options: ExecuteOptions = {}
+  ): Promise<ExecuteResult> => {
+    return new Promise((resolve, reject) => {
+      confirmUserOp(
+        callData,
+        async () => {
+          try {
+            const result = await performExecution(callData, options);
+            resolve(result);
+          } catch (error) {
+            reject(error);
+          }
+        }
+      );
+    });
+  }, [performExecution, confirmUserOp]);
 
   return {
     executeCallData,

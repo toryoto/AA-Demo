@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { formatEther } from 'viem';
 import { 
   ArrowRightLeft, 
-  Loader2,
   ArrowUp, 
   ArrowDown,
   RefreshCw,
@@ -39,7 +38,6 @@ export const WrapToken = ({
 }) => {
   const [wrapAmount, setWrapAmount] = useState('');
   const [unwrapAmount, setUnwrapAmount] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
   const [balance, setBalance] = useState('0');
   const [activeTab, setActiveTab] = useState<'wrap' | 'unwrap'>('wrap');
   const [txStatus, setTxStatus] = useState<{status: 'success' | 'error', message: string} | null>(null);
@@ -75,7 +73,6 @@ export const WrapToken = ({
       return;
     }
 
-    setIsProcessing(true);
     setTxStatus(null);
 
     try {
@@ -95,8 +92,6 @@ export const WrapToken = ({
         status: 'error',
         message: error instanceof Error ? error.message : 'Failed to wrap ETH'
       });
-    } finally {
-      setIsProcessing(false);
     }
   };
 
@@ -115,7 +110,6 @@ export const WrapToken = ({
       return;
     }
 
-    setIsProcessing(true);
     setTxStatus(null);
 
     try {
@@ -135,8 +129,6 @@ export const WrapToken = ({
         status: 'error',
         message: error instanceof Error ? error.message : 'Failed to unwrap WSEP'
       });
-    } finally {
-      setIsProcessing(false);
     }
   };
 
@@ -253,7 +245,6 @@ export const WrapToken = ({
                   className="pr-16"
                   min="0"
                   step="0.0001"
-                  disabled={isProcessing}
                 />
                 <div className="absolute inset-y-0 right-3 flex items-center">
                   <span className="text-slate-500 text-sm font-medium">ETH</span>
@@ -266,18 +257,11 @@ export const WrapToken = ({
             
             <Button
               onClick={handleWrap}
-              disabled={!wrapAmount || isProcessing || parseFloat(wrapAmount) <= 0}
+              disabled={!wrapAmount || parseFloat(wrapAmount) <= 0}
               className="w-full"
               size="lg"
             >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Wrapping...
-                </>
-              ) : (
-                <>Wrap ETH to WSEP</>
-              )}
+              Wrap ETH to WSEP
             </Button>
           </div>
         ) : (
@@ -312,7 +296,6 @@ export const WrapToken = ({
                   min="0"
                   max={balance}
                   step="0.0001"
-                  disabled={isProcessing}
                 />
                 <div className="absolute inset-y-0 right-3 flex items-center">
                   <span className="text-slate-500 text-sm font-medium">WSEP</span>
@@ -325,18 +308,11 @@ export const WrapToken = ({
             
             <Button
               onClick={handleUnwrap}
-              disabled={!unwrapAmount || isProcessing || parseFloat(unwrapAmount) <= 0 || parseFloat(unwrapAmount) > parseFloat(balance)}
+              disabled={!unwrapAmount || parseFloat(unwrapAmount) <= 0 || parseFloat(unwrapAmount) > parseFloat(balance)}
               className="w-full"
               size="lg"
             >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Unwrapping...
-                </>
-              ) : (
-                <>Unwrap WSEP to ETH</>
-              )}
+              Unwrap WSEP to ETH
             </Button>
           </div>
         )}
