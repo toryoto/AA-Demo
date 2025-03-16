@@ -59,7 +59,6 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
   const [toAmount, setToAmount] = useState<string>('');
   const [slippage, setSlippage] = useState<number>(0.5);
   const [showSettings, setShowSettings] = useState<boolean>(false);
-  const [swapping, setSwapping] = useState<boolean>(false);
   const [swapStatus, setSwapStatus] = useState<{status: 'success' | 'error' | null; message: string}>({
     status: null,
     message: ''
@@ -196,8 +195,6 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
 
   const handleSwap = async () => {
     if (!fromToken || !toToken || !fromAmount || parseFloat(fromAmount) <= 0 || !pairSupported) return;
-    
-    setSwapping(true);
     setSwapStatus({ status: null, message: '' });
     
     try {
@@ -248,8 +245,6 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
         status: 'error',
         message: error instanceof Error ? error.message : 'Unknown error occurred'
       });
-    } finally {
-      setSwapping(false);
     }
   };
 
@@ -481,15 +476,10 @@ export const Swap: React.FC<SwapProps> = ({ isDeployed, onSwapComplete }) => {
         <Button
           className="w-full relative"
           size="lg"
-          disabled={!isValidSwap() || swapping || isCheckingPair}
+          disabled={!isValidSwap() || isCheckingPair}
           onClick={handleSwap}
         >
-          {swapping ? (
-            <div className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Processing transaction...</span>
-            </div>
-          ) : isCheckingPair ? (
+          {isCheckingPair ? (
             <div className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>Checking pair...</span>

@@ -40,7 +40,6 @@ export const SendTransaction: React.FC<SendTransactionProps> = ({
   isDeployed, 
   onTransactionComplete
 }) => {
-  const [sending, setSending] = useState(false);
   const [transactions, setTransactions] = useState<TransactionInput[]>([
     { recipient: '', amount: '' }
   ]);
@@ -71,7 +70,6 @@ export const SendTransaction: React.FC<SendTransactionProps> = ({
   };
 
   const handleSend = async () => {
-    setSending(true);
     setResult(null);
     
     try {      
@@ -124,8 +122,6 @@ export const SendTransaction: React.FC<SendTransactionProps> = ({
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error occurred'
       });
-    } finally {
-      setSending(false);
     }
   };
 
@@ -297,23 +293,12 @@ export const SendTransaction: React.FC<SendTransactionProps> = ({
       <CardFooter className="bg-slate-50 border-t border-slate-200 pt-4 pb-4">
         <Button
           onClick={handleSend}
-          disabled={sending || !isValid}
+          disabled={!isValid}
           className="w-full relative"
           size="lg"
         >
-          {sending ? (
-            <>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Loader2 className="h-5 w-5 animate-spin" />
-              </div>
-              <span className="opacity-0">Send Transaction</span>
-            </>
-          ) : (
-            <>
-              {transactions.length > 1 ? 'Send Batch Transaction' : 'Send Transaction'}
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </>
-          )}
+          {transactions.length > 1 ? 'Send Batch Transaction' : 'Send Transaction'}
+          <ArrowRight className="h-4 w-4 ml-2" />
         </Button>
       </CardFooter>
     </Card>
