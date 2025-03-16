@@ -223,14 +223,12 @@ export const UserOpConfirmationModal: React.FC<UserOpConfirmationModalProps> = (
     }
   };
 
-  // formatEth: ETH値をより読みやすい形式に変換する関数
   const formatEth = (value: bigint | undefined): string => {
     if (!value) return '0 ETH';
     
     // weiからETHに変換（1 ETH = 10^18 wei）
     const ethValue = Number(value) / 1e18;
     
-    // 適切な小数点以下の桁数でフォーマット
     if (ethValue < 0.000001) {
       return `${value.toString()} wei`;
     }
@@ -278,7 +276,7 @@ export const UserOpConfirmationModal: React.FC<UserOpConfirmationModalProps> = (
                         <div className="mt-1">
                           <details className="text-xs">
                             <summary className="cursor-pointer hover:text-blue-600">View arguments</summary>
-                            <div className="mt-1 bg-slate-100 p-2 rounded text-xs font-mono overflow-x-auto">
+                            <div className="mt-1 bg-slate-100 p-2 rounded text-xs font-mono overflow-x-auto max-h-32 overflow-y-auto">
                               <pre className="whitespace-pre-wrap break-all">{formatArgsForDisplay(op.args)}</pre>
                             </div>
                           </details>
