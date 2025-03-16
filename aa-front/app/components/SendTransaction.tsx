@@ -74,7 +74,7 @@ export const SendTransaction: React.FC<SendTransactionProps> = ({
     setSending(true);
     setResult(null);
     
-    try {
+    try {      
       if (transactions.length === 1) {
         const { recipient, amount } = transactions[0];
         const callData = encodeFunctionData({
@@ -82,31 +82,42 @@ export const SendTransaction: React.FC<SendTransactionProps> = ({
           functionName: 'execute',
           args: [recipient, parseEther(amount), '0x']
         });
-        const { receipt } = await await executeCallData(callData)
         
-        setResult({
-          success: true,
-          hash: receipt.receipt.transactionHash
-        });
+        const result = await executeCallData(callData);
+        
+        if (result.success) {
+          setResult({
+            success: true,
+            hash: result.txHash
+          });
+          
+          onTransactionComplete();
+        } else {
+          throw new Error(result.error || 'Transaction failed');
+        }
       } else {
         const targets = transactions.map(tx => tx.recipient);
         const values = transactions.map(tx => parseEther(tx.amount));
         const datas = transactions.map(() => '0x' as Hex);
-
         const callData = encodeFunctionData({
           abi: SimpleAccountABI,
           functionName: 'executeBatch',
           args: [targets, values, datas]
         });
-        const { receipt } = await await executeCallData(callData)
         
-        setResult({
-          success: true,
-          hash: receipt.receipt.transactionHash
-        });
+        const result = await executeCallData(callData);
+        
+        if (result.success) {
+          setResult({
+            success: true,
+            hash: result.txHash
+          });
+          
+          onTransactionComplete();
+        } else {
+          throw new Error(result.error || 'Transaction failed');
+        }
       }
-      
-      onTransactionComplete();
     } catch (error) {
       console.error('Transaction failed:', error);
       setResult({

@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AAProvider } from '../contexts/AAContext'
 import { rainbowWeb3AuthConnector } from '../config/rainbowWeb3AuthConnector'
 import { web3AuthConfig } from '../config/web3AuthConfig'
+import { UserOpConfirmationProvider } from '../contexts/UserOpConfirmationContext'
 
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || ''
 
@@ -44,9 +45,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <WagmiProvider config={config}>
         <RainbowKitProvider modalSize="compact">
-          <AAProvider>
-            {children}
-          </AAProvider>
+          <UserOpConfirmationProvider>
+            <AAProvider>
+              {children}
+            </AAProvider>
+          </UserOpConfirmationProvider>
         </RainbowKitProvider>
       </WagmiProvider>
     </QueryClientProvider>
