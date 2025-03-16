@@ -1,58 +1,52 @@
-import React, { useState } from 'react';
-import { useAccount } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { 
-  Wallet, 
-  Check, 
-  Loader2, 
-  Send, 
+import React, { useState } from 'react'
+import { useAccount } from 'wagmi'
+import { ConnectButton } from '@rainbow-me/rainbowkit'
+import {
+  Wallet,
+  Check,
+  Loader2,
+  Send,
   Layers,
   Coins,
   ArrowRightLeft,
   Shield,
   RefreshCw,
   ExternalLink,
-  ArrowDownUp
-} from 'lucide-react';
-import { 
-  Card, 
-  CardContent, 
-  CardDescription, 
-  CardHeader, 
-  CardTitle 
-} from './ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Label } from './ui/label';
-import { Button } from './ui/button';
-import { useAA } from '../hooks/useAA';
-import { useFetchAABalance } from '../hooks/useFetchAABalance';
-import { SendTransaction } from './SendTransaction';
-import { WrapToken } from './WrapToken';
-import { TokenCreation } from './TokenCreation';
-import { Hex } from 'viem';
-import { Swap } from './Swap';
+  ArrowDownUp,
+} from 'lucide-react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
+import { Label } from './ui/label'
+import { Button } from './ui/button'
+import { useAA } from '../hooks/useAA'
+import { useFetchAABalance } from '../hooks/useFetchAABalance'
+import { SendTransaction } from './SendTransaction'
+import { WrapToken } from './WrapToken'
+import { TokenCreation } from './TokenCreation'
+import { Hex } from 'viem'
+import { Swap } from './Swap'
 
 export default function AAWallet() {
-  const { address, isConnected } = useAccount();
-  const { aaAddress, isDeployed, loading, deployAccount } = useAA();
-  const [deploying, setDeploying] = useState(false);
-  const { balance, isBalanceLoading, fetchBalance } = useFetchAABalance(aaAddress);
+  const { address, isConnected } = useAccount()
+  const { aaAddress, isDeployed, loading, deployAccount } = useAA()
+  const [deploying, setDeploying] = useState(false)
+  const { balance, isBalanceLoading, fetchBalance } = useFetchAABalance(aaAddress)
 
   const handleDeploy = async () => {
-    setDeploying(true);
+    setDeploying(true)
     try {
-      await deployAccount();
-      fetchBalance();
+      await deployAccount()
+      fetchBalance()
     } catch (error) {
-      console.error('Deploy error:', error);
+      console.error('Deploy error:', error)
     } finally {
-      setDeploying(false);
+      setDeploying(false)
     }
-  };
+  }
 
   const shortenAddress = (addr: Hex) => {
-    return addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : '';
-  };
+    return addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : ''
+  }
 
   if (!isConnected) {
     return (
@@ -63,17 +57,19 @@ export default function AAWallet() {
               <Shield className="h-16 w-16 text-primary" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">ERC-4337 Smart Account</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            ERC-4337 Smart Account
+          </h1>
           <p className="text-slate-600">
-            Experience the next generation of Ethereum accounts with gasless transactions,
-            batch operations, and advanced token management.
+            Experience the next generation of Ethereum accounts with gasless transactions, batch
+            operations, and advanced token management.
           </p>
           <div className="flex justify-center mt-4">
             <ConnectButton label="Get Started" />
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -103,23 +99,44 @@ export default function AAWallet() {
                 <span className="text-sm font-mono break-all text-slate-800">
                   {address ? shortenAddress(address) : ''}
                 </span>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-6 w-6 p-0" 
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
                   onClick={() => address && navigator.clipboard.writeText(address)}
                   title="Copy address"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-4 w-4 text-slate-500 hover:text-primary">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="2" />
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" strokeWidth="2" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    className="h-4 w-4 text-slate-500 hover:text-primary"
+                  >
+                    <rect
+                      x="9"
+                      y="9"
+                      width="13"
+                      height="13"
+                      rx="2"
+                      ry="2"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    />
+                    <path
+                      d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    />
                   </svg>
                 </Button>
               </div>
             </div>
 
             <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-              <Label className="text-xs font-medium text-slate-500 mb-1 block">Smart Account Address</Label>
+              <Label className="text-xs font-medium text-slate-500 mb-1 block">
+                Smart Account Address
+              </Label>
               {loading ? (
                 <div className="flex items-center gap-2 text-slate-600">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -127,20 +144,41 @@ export default function AAWallet() {
                 </div>
               ) : aaAddress && aaAddress !== '0x' ? (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-mono break-all text-slate-800">{shortenAddress(aaAddress)}</span>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-6 w-6 p-0" 
+                  <span className="text-sm font-mono break-all text-slate-800">
+                    {shortenAddress(aaAddress)}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
                     onClick={() => navigator.clipboard.writeText(aaAddress)}
                     title="Copy address"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-4 w-4 text-slate-500 hover:text-primary">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="2" />
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor" strokeWidth="2" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      className="h-4 w-4 text-slate-500 hover:text-primary"
+                    >
+                      <rect
+                        x="9"
+                        y="9"
+                        width="13"
+                        height="13"
+                        rx="2"
+                        ry="2"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      />
+                      <path
+                        d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      />
                     </svg>
                   </Button>
-                  <a 
+                  <a
                     href={`https://sepolia.etherscan.io/address/${aaAddress}`}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -167,12 +205,12 @@ export default function AAWallet() {
                 >
                   {deploying ? (
                     <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> 
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       Deploying Smart Account...
                     </>
                   ) : (
                     <>
-                      <Shield className="h-4 w-4 mr-2" /> 
+                      <Shield className="h-4 w-4 mr-2" />
                       Deploy Smart Account
                     </>
                   )}
@@ -193,13 +231,15 @@ export default function AAWallet() {
                     {isBalanceLoading ? (
                       <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
                     ) : (
-                      <span className="font-semibold text-lg">{parseFloat(balance).toFixed(4)}</span>
+                      <span className="font-semibold text-lg">
+                        {parseFloat(balance).toFixed(4)}
+                      </span>
                     )}
                     <span className="text-slate-600">ETH</span>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-6 w-6 p-0" 
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0"
                       onClick={fetchBalance}
                       title="Refresh balance"
                     >
@@ -235,10 +275,7 @@ export default function AAWallet() {
           </TabsList>
 
           <TabsContent value="transactions" className="space-y-4 mt-6">
-            <SendTransaction 
-              isDeployed={isDeployed} 
-              onTransactionComplete={fetchBalance} 
-            />
+            <SendTransaction isDeployed={isDeployed} onTransactionComplete={fetchBalance} />
           </TabsContent>
 
           <TabsContent value="wrap" className="space-y-4 mt-6">
@@ -250,10 +287,7 @@ export default function AAWallet() {
           </TabsContent>
 
           <TabsContent value="swap" className="space-y-4 mt-6">
-            <Swap
-              isDeployed={isDeployed} 
-              onSwapComplete={fetchBalance}
-            />
+            <Swap isDeployed={isDeployed} onSwapComplete={fetchBalance} />
           </TabsContent>
         </Tabs>
       )}
@@ -265,16 +299,14 @@ export default function AAWallet() {
               <div className="bg-slate-100 p-3 rounded-full">
                 <Layers className="h-10 w-10 text-slate-400" />
               </div>
-              <CardTitle className="text-xl font-semibold text-slate-700">Features Awaiting</CardTitle>
+              <CardTitle className="text-xl font-semibold text-slate-700">
+                Features Awaiting
+              </CardTitle>
               <CardDescription className="max-w-md text-slate-600">
-                Deploy your smart account to unlock advanced features like sending transactions, creating tokens,
-                and managing assets with ERC-4337 account abstraction.
+                Deploy your smart account to unlock advanced features like sending transactions,
+                creating tokens, and managing assets with ERC-4337 account abstraction.
               </CardDescription>
-              <Button
-                onClick={handleDeploy}
-                disabled={deploying || loading}
-                className="mt-2"
-              >
+              <Button onClick={handleDeploy} disabled={deploying || loading} className="mt-2">
                 {deploying ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -292,5 +324,5 @@ export default function AAWallet() {
         </Card>
       )}
     </div>
-  );
+  )
 }

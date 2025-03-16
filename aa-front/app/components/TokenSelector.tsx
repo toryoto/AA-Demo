@@ -1,42 +1,38 @@
-import React, { useState, useEffect } from 'react';
-import { CheckCircle2, ChevronDown } from 'lucide-react';
-import { Button } from './ui/button';
-import Image from 'next/image';
-import { TOKEN_OPTIONS } from '../constants/tokenList';
+import React, { useState, useEffect } from 'react'
+import { CheckCircle2, ChevronDown } from 'lucide-react'
+import { Button } from './ui/button'
+import Image from 'next/image'
+import { TOKEN_OPTIONS } from '../constants/tokenList'
 
 interface TokenSelectorProps {
-  value: string; 
-  onChange: (value: string) => void; 
-  disabled?: string[];
+  value: string
+  onChange: (value: string) => void
+  disabled?: string[]
 }
 
-const TokenSelector: React.FC<TokenSelectorProps> = ({ 
-  value, 
-  onChange, 
-  disabled = [] 
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const ref = React.useRef<HTMLDivElement>(null);
+const TokenSelector: React.FC<TokenSelectorProps> = ({ value, onChange, disabled = [] }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const ref = React.useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (ref.current && !ref.current.contains(event.target as Node)) {
-        setIsOpen(false);
+        setIsOpen(false)
       }
-    };
+    }
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside)
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
 
   const handleSelectToken = (tokenValue: string) => {
-    onChange(tokenValue);
-    setIsOpen(false);
-  };
+    onChange(tokenValue)
+    setIsOpen(false)
+  }
 
-  const selectedToken = TOKEN_OPTIONS.find(t => t.address === value);
+  const selectedToken = TOKEN_OPTIONS.find(t => t.address === value)
 
   return (
     <div className="relative" ref={ref}>
@@ -48,25 +44,25 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
       >
         {selectedToken ? (
           <div className="flex items-center">
-            <Image 
+            <Image
               width={24}
               height={24}
-              src={selectedToken.logo} 
-              alt={selectedToken.symbol} 
+              src={selectedToken.logo}
+              alt={selectedToken.symbol}
               className="w-5 h-5 mr-2 rounded-full"
             />
             {selectedToken.symbol}
           </div>
         ) : (
-          "Select token"
+          'Select token'
         )}
         <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
       </Button>
-      
+
       {isOpen && (
         <div className="absolute top-full left-0 z-10 mt-1 w-60 rounded-md border border-slate-200 bg-white shadow-lg">
           <div className="p-1">
-            {TOKEN_OPTIONS.map((option) => (
+            {TOKEN_OPTIONS.map(option => (
               <button
                 key={option.address}
                 className={`
@@ -74,14 +70,16 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
                   ${value === option.address ? 'bg-slate-100' : 'hover:bg-slate-50'}
                   ${disabled.includes(option.address) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
                 `}
-                onClick={() => !disabled.includes(option.address) && handleSelectToken(option.address)}
+                onClick={() =>
+                  !disabled.includes(option.address) && handleSelectToken(option.address)
+                }
                 disabled={disabled.includes(option.address)}
               >
                 <Image
                   width={24}
                   height={24}
-                  src={option.logo} 
-                  alt={option.symbol} 
+                  src={option.logo}
+                  alt={option.symbol}
                   className="w-6 h-6 mr-2 rounded-full"
                 />
                 <div className="flex flex-col items-start">
@@ -97,7 +95,7 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default TokenSelector;
+export default TokenSelector

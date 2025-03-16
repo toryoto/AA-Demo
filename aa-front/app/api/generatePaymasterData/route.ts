@@ -14,13 +14,7 @@ if (!PAYMASTER_PRIVATE_KEY || !PAYMASTER_ADDRESS) {
 
 const paymasterAccount = privateKeyToAccount(PAYMASTER_PRIVATE_KEY as `0x${string}`)
 
-const encodePaymasterAndData = ({
-  paymaster,
-  data,
-}: {
-  paymaster: Hex
-  data: Hex
-}) => {
+const encodePaymasterAndData = ({ paymaster, data }: { paymaster: Hex; data: Hex }) => {
   const encoded = `${paymaster.replace('0x', '')}${data.replace('0x', '')}`
   return `0x${encoded}` as Hex
 }
@@ -36,7 +30,7 @@ const validateUserOp = (userOp: UserOperation): boolean => {
     'preVerificationGas',
     'maxFeePerGas',
     'maxPriorityFeePerGas',
-    'signature'
+    'signature',
   ]
 
   return requiredFields.every(field => field in userOp)
@@ -49,16 +43,13 @@ export async function POST(request: NextRequest) {
     console.log(userOp)
 
     if (!userOp || !validateUserOp(userOp)) {
-      return NextResponse.json(
-        { error: 'Invalid UserOperation provided' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid UserOperation provided' }, { status: 400 })
     }
 
     const verifyingPaymaster = getContract({
       address: PAYMASTER_ADDRESS,
       abi: verifyingPaymasterAbi,
-      client: publicClient
+      client: publicClient,
     })
 
     const userOpHash = await verifyingPaymaster.read.getHash([userOp])
@@ -74,17 +65,13 @@ export async function POST(request: NextRequest) {
       data: signature,
     })
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       paymasterAndData,
       hash: userOpHash,
-      signature 
+      signature,
     })
-
   } catch (error) {
     console.error('Error in paymaster API:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

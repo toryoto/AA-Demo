@@ -13,11 +13,11 @@ export const web3AuthConfig = {
       useLogoLoader: true,
       defaultLanguage: 'en',
       theme: {
-        primary: '#000000'
+        primary: '#000000',
       },
       loginMethodsOrder: ['google'],
       uxMode: 'redirect',
-      modalZIndex: '2147483647'
+      modalZIndex: '2147483647',
     },
-  }
+  },
 }

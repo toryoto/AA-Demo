@@ -1,138 +1,121 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { formatEther } from 'viem';
-import { 
-  ArrowRightLeft, 
-  ArrowUp, 
+import React, { useState, useEffect, useCallback } from 'react'
+import { formatEther } from 'viem'
+import {
+  ArrowRightLeft,
+  ArrowUp,
   ArrowDown,
   RefreshCw,
   Info,
   CheckCircle2,
-  AlertCircle
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { useWrapSepolia } from '../hooks/useWrapSepolia';
-import { useAA } from '../hooks/useAA';
-import { 
-  Card, 
-  CardContent, 
-  CardDescription,  
-  CardHeader, 
-  CardTitle 
-} from './ui/card';
-import { Label } from './ui/label';
-import { Input } from './ui/input';
-import { Button } from './ui/button';
-import { 
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from './ui/tooltip';
-import { Badge } from './ui/badge';
-import { Alert, AlertDescription } from './ui/alert';
+  AlertCircle,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import { useWrapSepolia } from '../hooks/useWrapSepolia'
+import { useAA } from '../hooks/useAA'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
+import { Label } from './ui/label'
+import { Input } from './ui/input'
+import { Button } from './ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
+import { Badge } from './ui/badge'
+import { Alert, AlertDescription } from './ui/alert'
 
-export const WrapToken = ({ 
-  isDeployed,
-}: { 
-  isDeployed: boolean;
-}) => {
-  const [wrapAmount, setWrapAmount] = useState('');
-  const [unwrapAmount, setUnwrapAmount] = useState('');
-  const [balance, setBalance] = useState('0');
-  const [activeTab, setActiveTab] = useState<'wrap' | 'unwrap'>('wrap');
-  const [txStatus, setTxStatus] = useState<{status: 'success' | 'error', message: string} | null>(null);
+export const WrapToken = ({ isDeployed }: { isDeployed: boolean }) => {
+  const [wrapAmount, setWrapAmount] = useState('')
+  const [unwrapAmount, setUnwrapAmount] = useState('')
+  const [balance, setBalance] = useState('0')
+  const [activeTab, setActiveTab] = useState<'wrap' | 'unwrap'>('wrap')
+  const [txStatus, setTxStatus] = useState<{ status: 'success' | 'error'; message: string } | null>(
+    null
+  )
 
   const { aaAddress } = useAA()
 
-  const {
-    deposit,
-    withdraw,
-    balanceOf
-  } = useWrapSepolia(aaAddress);
+  const { deposit, withdraw, balanceOf } = useWrapSepolia(aaAddress)
 
   const updateBalance = useCallback(async () => {
     if (isDeployed && aaAddress) {
       try {
-        const bal = await balanceOf();
-        setBalance(formatEther(bal));
+        const bal = await balanceOf()
+        setBalance(formatEther(bal))
       } catch (error) {
-        console.error('Error fetching balance:', error);
+        console.error('Error fetching balance:', error)
       }
     }
-  }, [isDeployed, aaAddress, balanceOf]);
+  }, [isDeployed, aaAddress, balanceOf])
 
   useEffect(() => {
-    updateBalance();
-  }, [updateBalance]);
+    updateBalance()
+  }, [updateBalance])
 
   const handleWrap = async () => {
     if (!wrapAmount || parseFloat(wrapAmount) <= 0) {
       toast.error('Invalid amount', {
-        description: 'Please enter a valid amount to wrap'
-      });
-      return;
+        description: 'Please enter a valid amount to wrap',
+      })
+      return
     }
 
-    setTxStatus(null);
+    setTxStatus(null)
 
     try {
-      const result = await deposit(wrapAmount);
+      const result = await deposit(wrapAmount)
       if (result.success) {
         setTxStatus({
           status: 'success',
-          message: `Successfully wrapped ${wrapAmount} ETH to WSEP`
-        });
-        setWrapAmount('');
-        await updateBalance();
+          message: `Successfully wrapped ${wrapAmount} ETH to WSEP`,
+        })
+        setWrapAmount('')
+        await updateBalance()
       } else {
-        throw new Error(result.error);
+        throw new Error(result.error)
       }
     } catch (error) {
       setTxStatus({
         status: 'error',
-        message: error instanceof Error ? error.message : 'Failed to wrap ETH'
-      });
+        message: error instanceof Error ? error.message : 'Failed to wrap ETH',
+      })
     }
-  };
+  }
 
   const handleUnwrap = async () => {
     if (!unwrapAmount || parseFloat(unwrapAmount) <= 0) {
       toast.error('Invalid amount', {
-        description: 'Please enter a valid amount to unwrap'
-      });
-      return;
+        description: 'Please enter a valid amount to unwrap',
+      })
+      return
     }
 
     if (parseFloat(unwrapAmount) > parseFloat(balance)) {
       toast.error('Insufficient balance', {
-        description: 'You don\'t have enough WSEP to unwrap'
-      });
-      return;
+        description: "You don't have enough WSEP to unwrap",
+      })
+      return
     }
 
-    setTxStatus(null);
+    setTxStatus(null)
 
     try {
-      const result = await withdraw(unwrapAmount);
+      const result = await withdraw(unwrapAmount)
       if (result.success) {
         setTxStatus({
           status: 'success',
-          message: `Successfully unwrapped ${unwrapAmount} WSEP to ETH`
-        });
-        setUnwrapAmount('');
-        await updateBalance();
+          message: `Successfully unwrapped ${unwrapAmount} WSEP to ETH`,
+        })
+        setUnwrapAmount('')
+        await updateBalance()
       } else {
-        throw new Error(result.error);
+        throw new Error(result.error)
       }
     } catch (error) {
       setTxStatus({
         status: 'error',
-        message: error instanceof Error ? error.message : 'Failed to unwrap WSEP'
-      });
+        message: error instanceof Error ? error.message : 'Failed to unwrap WSEP',
+      })
     }
-  };
+  }
 
-  if (!isDeployed) return null;
+  if (!isDeployed) return null
 
   return (
     <Card className="border-slate-200 shadow-sm overflow-hidden">
@@ -142,16 +125,18 @@ export const WrapToken = ({
             <ArrowRightLeft className="h-5 w-5 text-primary" />
             <CardTitle className="text-lg font-bold">Wrap/Unwrap ETH</CardTitle>
           </div>
-          
+
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="flex items-center gap-1 bg-slate-100 px-3 py-1 rounded-full">
-                  <span className="text-sm font-medium text-slate-800">Balance: {parseFloat(balance).toFixed(4)} WSEP</span>
-                  <Button 
-                    variant="ghost" 
+                  <span className="text-sm font-medium text-slate-800">
+                    Balance: {parseFloat(balance).toFixed(4)} WSEP
+                  </span>
+                  <Button
+                    variant="ghost"
                     size="icon"
-                    className="h-6 w-6 rounded-full p-0 text-slate-500 hover:text-primary hover:bg-slate-200" 
+                    className="h-6 w-6 rounded-full p-0 text-slate-500 hover:text-primary hover:bg-slate-200"
                     onClick={updateBalance}
                   >
                     <RefreshCw className="h-3 w-3" />
@@ -168,13 +153,15 @@ export const WrapToken = ({
           Convert between ETH and Wrapped Sepolia ETH (WSEP)
         </CardDescription>
       </CardHeader>
-      
+
       <div className="flex border-b border-slate-100">
         <Button
           variant="ghost"
-          className={`flex-1 rounded-none border-b-2 ${activeTab === 'wrap' 
-            ? 'border-primary text-primary' 
-            : 'border-transparent text-slate-500 hover:text-slate-900'}`}
+          className={`flex-1 rounded-none border-b-2 ${
+            activeTab === 'wrap'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
           onClick={() => setActiveTab('wrap')}
         >
           <ArrowDown className="h-4 w-4 mr-2" />
@@ -182,23 +169,29 @@ export const WrapToken = ({
         </Button>
         <Button
           variant="ghost"
-          className={`flex-1 rounded-none border-b-2 ${activeTab === 'unwrap' 
-            ? 'border-primary text-primary' 
-            : 'border-transparent text-slate-500 hover:text-slate-900'}`}
+          className={`flex-1 rounded-none border-b-2 ${
+            activeTab === 'unwrap'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
           onClick={() => setActiveTab('unwrap')}
         >
           <ArrowUp className="h-4 w-4 mr-2" />
           Unwrap WSEP
         </Button>
       </div>
-      
+
       <CardContent className="p-6 space-y-4">
         {txStatus && (
-          <Alert className={`${txStatus.status === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+          <Alert
+            className={`${txStatus.status === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}
+          >
             <div className="flex items-start gap-2">
-              {txStatus.status === 'success' 
-                ? <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" /> 
-                : <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />}
+              {txStatus.status === 'success' ? (
+                <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
+              ) : (
+                <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+              )}
               <AlertDescription>{txStatus.message}</AlertDescription>
             </div>
           </Alert>
@@ -214,7 +207,9 @@ export const WrapToken = ({
                   </div>
                   <div className="space-y-1">
                     <p className="font-medium text-slate-800">Wrap ETH to WSEP</p>
-                    <p className="text-sm text-slate-600">Convert native ETH to wrapped ERC-20 token</p>
+                    <p className="text-sm text-slate-600">
+                      Convert native ETH to wrapped ERC-20 token
+                    </p>
                   </div>
                 </div>
                 <TooltipProvider>
@@ -226,22 +221,27 @@ export const WrapToken = ({
                       </div>
                     </TooltipTrigger>
                     <TooltipContent className="max-w-xs">
-                      <p className="text-sm">Wrapped ETH (WSEP) is an ERC-20 token that represents ETH 1:1, allowing you to use ETH in DeFi applications that require ERC-20 tokens.</p>
+                      <p className="text-sm">
+                        Wrapped ETH (WSEP) is an ERC-20 token that represents ETH 1:1, allowing you
+                        to use ETH in DeFi applications that require ERC-20 tokens.
+                      </p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               </div>
             </div>
-            
+
             <div className="space-y-2">
-              <Label htmlFor="wrapAmount" className="text-sm font-medium">Amount to Wrap</Label>
+              <Label htmlFor="wrapAmount" className="text-sm font-medium">
+                Amount to Wrap
+              </Label>
               <div className="relative">
                 <Input
                   id="wrapAmount"
                   type="number"
                   placeholder="0.0"
                   value={wrapAmount}
-                  onChange={(e) => setWrapAmount(e.target.value)}
+                  onChange={e => setWrapAmount(e.target.value)}
                   className="pr-16"
                   min="0"
                   step="0.0001"
@@ -254,7 +254,7 @@ export const WrapToken = ({
                 You will receive {wrapAmount ? parseFloat(wrapAmount).toFixed(4) : '0'} WSEP
               </p>
             </div>
-            
+
             <Button
               onClick={handleWrap}
               disabled={!wrapAmount || parseFloat(wrapAmount) <= 0}
@@ -282,16 +282,18 @@ export const WrapToken = ({
                 </Badge>
               </div>
             </div>
-            
+
             <div className="space-y-2">
-              <Label htmlFor="unwrapAmount" className="text-sm font-medium">Amount to Unwrap</Label>
+              <Label htmlFor="unwrapAmount" className="text-sm font-medium">
+                Amount to Unwrap
+              </Label>
               <div className="relative">
                 <Input
                   id="unwrapAmount"
                   type="number"
                   placeholder="0.0"
                   value={unwrapAmount}
-                  onChange={(e) => setUnwrapAmount(e.target.value)}
+                  onChange={e => setUnwrapAmount(e.target.value)}
                   className="pr-16"
                   min="0"
                   max={balance}
@@ -305,10 +307,14 @@ export const WrapToken = ({
                 You will receive {unwrapAmount ? parseFloat(unwrapAmount).toFixed(4) : '0'} ETH
               </p>
             </div>
-            
+
             <Button
               onClick={handleUnwrap}
-              disabled={!unwrapAmount || parseFloat(unwrapAmount) <= 0 || parseFloat(unwrapAmount) > parseFloat(balance)}
+              disabled={
+                !unwrapAmount ||
+                parseFloat(unwrapAmount) <= 0 ||
+                parseFloat(unwrapAmount) > parseFloat(balance)
+              }
               className="w-full"
               size="lg"
             >
@@ -318,5 +324,5 @@ export const WrapToken = ({
         )}
       </CardContent>
     </Card>
-  );
-};
+  )
+}

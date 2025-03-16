@@ -1,229 +1,229 @@
 export const tokenCreationFactoryAbi = [
   {
-    "anonymous": false,
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "creator",
-        "type": "address"
+        indexed: true,
+        internalType: 'address',
+        name: 'creator',
+        type: 'address',
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "tokenAddress",
-        "type": "address"
+        indexed: true,
+        internalType: 'address',
+        name: 'tokenAddress',
+        type: 'address',
       },
       {
-        "indexed": false,
-        "internalType": "string",
-        "name": "name",
-        "type": "string"
+        indexed: false,
+        internalType: 'string',
+        name: 'name',
+        type: 'string',
       },
       {
-        "indexed": false,
-        "internalType": "string",
-        "name": "symbol",
-        "type": "string"
+        indexed: false,
+        internalType: 'string',
+        name: 'symbol',
+        type: 'string',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "initialSupply",
-        "type": "uint256"
+        indexed: false,
+        internalType: 'uint256',
+        name: 'initialSupply',
+        type: 'uint256',
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "timestamp",
-        "type": "uint256"
-      }
+        indexed: false,
+        internalType: 'uint256',
+        name: 'timestamp',
+        type: 'uint256',
+      },
     ],
-    "name": "TokenCreated",
-    "type": "event"
+    name: 'TokenCreated',
+    type: 'event',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "string",
-        "name": "name_",
-        "type": "string"
+        internalType: 'string',
+        name: 'name_',
+        type: 'string',
       },
       {
-        "internalType": "string",
-        "name": "symbol_",
-        "type": "string"
+        internalType: 'string',
+        name: 'symbol_',
+        type: 'string',
       },
       {
-        "internalType": "uint256",
-        "name": "initialSupply_",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'initialSupply_',
+        type: 'uint256',
+      },
     ],
-    "name": "createToken",
-    "outputs": [
+    name: 'createToken',
+    outputs: [
       {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
     ],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "user",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'user',
+        type: 'address',
+      },
     ],
-    "name": "getUserLatestToken",
-    "outputs": [
+    name: 'getUserLatestToken',
+    outputs: [
       {
-        "components": [
+        components: [
           {
-            "internalType": "address",
-            "name": "tokenAddress",
-            "type": "address"
+            internalType: 'address',
+            name: 'tokenAddress',
+            type: 'address',
           },
           {
-            "internalType": "string",
-            "name": "name",
-            "type": "string"
+            internalType: 'string',
+            name: 'name',
+            type: 'string',
           },
           {
-            "internalType": "string",
-            "name": "symbol",
-            "type": "string"
+            internalType: 'string',
+            name: 'symbol',
+            type: 'string',
           },
           {
-            "internalType": "uint256",
-            "name": "initialSupply",
-            "type": "uint256"
+            internalType: 'uint256',
+            name: 'initialSupply',
+            type: 'uint256',
           },
           {
-            "internalType": "uint256",
-            "name": "timestamp",
-            "type": "uint256"
-          }
+            internalType: 'uint256',
+            name: 'timestamp',
+            type: 'uint256',
+          },
         ],
-        "internalType": "struct CreateTokenFactory.TokenInfo",
-        "name": "",
-        "type": "tuple"
-      }
+        internalType: 'struct CreateTokenFactory.TokenInfo',
+        name: '',
+        type: 'tuple',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "user",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'user',
+        type: 'address',
+      },
     ],
-    "name": "getUserTokenCount",
-    "outputs": [
+    name: 'getUserTokenCount',
+    outputs: [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "user",
-        "type": "address"
-      }
+        internalType: 'address',
+        name: 'user',
+        type: 'address',
+      },
     ],
-    "name": "getUserTokens",
-    "outputs": [
+    name: 'getUserTokens',
+    outputs: [
       {
-        "components": [
+        components: [
           {
-            "internalType": "address",
-            "name": "tokenAddress",
-            "type": "address"
+            internalType: 'address',
+            name: 'tokenAddress',
+            type: 'address',
           },
           {
-            "internalType": "string",
-            "name": "name",
-            "type": "string"
+            internalType: 'string',
+            name: 'name',
+            type: 'string',
           },
           {
-            "internalType": "string",
-            "name": "symbol",
-            "type": "string"
+            internalType: 'string',
+            name: 'symbol',
+            type: 'string',
           },
           {
-            "internalType": "uint256",
-            "name": "initialSupply",
-            "type": "uint256"
+            internalType: 'uint256',
+            name: 'initialSupply',
+            type: 'uint256',
           },
           {
-            "internalType": "uint256",
-            "name": "timestamp",
-            "type": "uint256"
-          }
+            internalType: 'uint256',
+            name: 'timestamp',
+            type: 'uint256',
+          },
         ],
-        "internalType": "struct CreateTokenFactory.TokenInfo[]",
-        "name": "",
-        "type": "tuple[]"
-      }
+        internalType: 'struct CreateTokenFactory.TokenInfo[]',
+        name: '',
+        type: 'tuple[]',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
   {
-    "inputs": [
+    inputs: [
       {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
+        internalType: 'address',
+        name: '',
+        type: 'address',
       },
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
     ],
-    "name": "userTokens",
-    "outputs": [
+    name: 'userTokens',
+    outputs: [
       {
-        "internalType": "address",
-        "name": "tokenAddress",
-        "type": "address"
+        internalType: 'address',
+        name: 'tokenAddress',
+        type: 'address',
       },
       {
-        "internalType": "string",
-        "name": "name",
-        "type": "string"
+        internalType: 'string',
+        name: 'name',
+        type: 'string',
       },
       {
-        "internalType": "string",
-        "name": "symbol",
-        "type": "string"
+        internalType: 'string',
+        name: 'symbol',
+        type: 'string',
       },
       {
-        "internalType": "uint256",
-        "name": "initialSupply",
-        "type": "uint256"
+        internalType: 'uint256',
+        name: 'initialSupply',
+        type: 'uint256',
       },
       {
-        "internalType": "uint256",
-        "name": "timestamp",
-        "type": "uint256"
-      }
+        internalType: 'uint256',
+        name: 'timestamp',
+        type: 'uint256',
+      },
     ],
-    "stateMutability": "view",
-    "type": "function"
-  }
+    stateMutability: 'view',
+    type: 'function',
+  },
 ]

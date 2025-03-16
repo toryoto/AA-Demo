@@ -1,24 +1,31 @@
-import { encodeFunctionData, Hex, parseUnits, formatUnits } from "viem"
-import { SimpleAccountABI } from "../abi/simpleAccount"
-import { publicClient } from "../utils/client"
-import { useUserOperationExecutor } from "./useUserOpExecutor"
-import { DAI_ADDRESS, JPYT_ADDRESS, UNISWAP_FACTORY_ADDRESS, UNISWAP_ROUTER_ADDRESS, USDC_ADDRESS, WRAPPED_SEPOLIA_ADDRESS } from "../constants/addresses"
-import { erc20Abi } from "../abi/erc20"
-import { dexRouterAbi } from "../abi/dexRouter"
-import { wrappedSepolia } from "../abi/wrappedSepolia"
+import { encodeFunctionData, Hex, parseUnits, formatUnits } from 'viem'
+import { SimpleAccountABI } from '../abi/simpleAccount'
+import { publicClient } from '../utils/client'
+import { useUserOperationExecutor } from './useUserOpExecutor'
+import {
+  DAI_ADDRESS,
+  JPYT_ADDRESS,
+  UNISWAP_FACTORY_ADDRESS,
+  UNISWAP_ROUTER_ADDRESS,
+  USDC_ADDRESS,
+  WRAPPED_SEPOLIA_ADDRESS,
+} from '../constants/addresses'
+import { erc20Abi } from '../abi/erc20'
+import { dexRouterAbi } from '../abi/dexRouter'
+import { wrappedSepolia } from '../abi/wrappedSepolia'
 
 interface SwapOptions {
-  fromToken: string;  // トークンのアドレス
-  toToken: string;    // トークンのアドレス
-  amount: string;     // 入力金額
-  slippage: number;   // スリッページ許容値（パーセント）
-  deadline: number;   // 期限（秒）
+  fromToken: string // トークンのアドレス
+  toToken: string // トークンのアドレス
+  amount: string // 入力金額
+  slippage: number // スリッページ許容値（パーセント）
+  deadline: number // 期限（秒）
 }
 
 interface TransactionResult {
-  success: boolean;
-  hash?: string;
-  error?: string;
+  success: boolean
+  hash?: string
+  error?: string
 }
 
 // Token decimal mapping
@@ -27,99 +34,104 @@ const TOKEN_DECIMALS: Record<string, number> = {
   [DAI_ADDRESS]: 18,
   [WRAPPED_SEPOLIA_ADDRESS]: 18,
   [JPYT_ADDRESS]: 6,
-  'SEP': 18,
-};
+  SEP: 18,
+}
 
 export function useSwap(aaAddress: Hex) {
-  const { executeCallData } = useUserOperationExecutor(aaAddress);
-  
+  const { executeCallData } = useUserOperationExecutor(aaAddress)
+
   const getTokenDecimals = (tokenAddress: string): number => {
-    return TOKEN_DECIMALS[tokenAddress];
-  };
-  
-  const checkPairExists = async (fromAddress: string, toAddress: string): Promise<{exists: boolean; pairAddress: string}> => {
+    return TOKEN_DECIMALS[tokenAddress]
+  }
+
+  const checkPairExists = async (
+    fromAddress: string,
+    toAddress: string
+  ): Promise<{ exists: boolean; pairAddress: string }> => {
     try {
-      const pairAddress = await publicClient.readContract({
+      const pairAddress = (await publicClient.readContract({
         address: UNISWAP_FACTORY_ADDRESS as `0x${string}`,
         abi: dexRouterAbi,
         functionName: 'getPair',
-        args: [fromAddress, toAddress]
-      }) as `0x${string}`;
-  
-      const exists = pairAddress !== '0x0000000000000000000000000000000000000000';
-      console.log('Pair address:', pairAddress);
-      
-      return { exists, pairAddress };
+        args: [fromAddress, toAddress],
+      })) as `0x${string}`
+
+      const exists = pairAddress !== '0x0000000000000000000000000000000000000000'
+      console.log('Pair address:', pairAddress)
+
+      return { exists, pairAddress }
     } catch (error) {
-      console.error("Failed to check pair existence:", error);
-      return { exists: false, pairAddress: '0x' };
+      console.error('Failed to check pair existence:', error)
+      return { exists: false, pairAddress: '0x' }
     }
-  };
+  }
 
   const isSupportedPair = async (fromAddress: string, toAddress: string): Promise<boolean> => {
-    const actualFromAddress = fromAddress === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : fromAddress;
-    const actualToAddress = toAddress === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : toAddress;
-    
-    const { exists } = await checkPairExists(actualFromAddress, actualToAddress);
-    console.log('Pair support:', exists);
-    return exists;
-  };
+    const actualFromAddress = fromAddress === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : fromAddress
+    const actualToAddress = toAddress === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : toAddress
+
+    const { exists } = await checkPairExists(actualFromAddress, actualToAddress)
+    console.log('Pair support:', exists)
+    return exists
+  }
 
   const swap = async (options: SwapOptions): Promise<TransactionResult> => {
     try {
-      const { fromToken, toToken, amount, slippage, deadline } = options;
-      console.log('From token:', fromToken);
-      
+      const { fromToken, toToken, amount, slippage, deadline } = options
+      console.log('From token:', fromToken)
+
       // ペアの存在確認
-      const fromTokenAddress = fromToken === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : fromToken;
-      const toTokenAddress = toToken === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : toToken;
-      
-      const pairSupported = await isSupportedPair(fromTokenAddress, toTokenAddress);
+      const fromTokenAddress = fromToken === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : fromToken
+      const toTokenAddress = toToken === 'SEP' ? WRAPPED_SEPOLIA_ADDRESS : toToken
+
+      const pairSupported = await isSupportedPair(fromTokenAddress, toTokenAddress)
       if (!pairSupported) {
-        throw new Error("This token pair doesn't have a liquidity pool.");
+        throw new Error("This token pair doesn't have a liquidity pool.")
       }
 
       if (parseFloat(amount) <= 0) {
-        throw new Error("Amount must be greater than 0");
+        throw new Error('Amount must be greater than 0')
       }
 
       // Get input token decimals
-      const fromDecimals = getTokenDecimals(fromTokenAddress);
-      
+      const fromDecimals = getTokenDecimals(fromTokenAddress)
+
       // Parse input amount with correct decimals
-      const inputAmount = parseUnits(amount, fromDecimals);
-      
+      const inputAmount = parseUnits(amount, fromDecimals)
+
       // Get swap estimate
-      const estimatedOut = await getSwapEstimate(fromTokenAddress, toTokenAddress, amount);
+      const estimatedOut = await getSwapEstimate(fromTokenAddress, toTokenAddress, amount)
       if (parseFloat(estimatedOut) <= 0) {
-        throw new Error("Could not estimate output amount. The pool may have insufficient liquidity.");
+        throw new Error(
+          'Could not estimate output amount. The pool may have insufficient liquidity.'
+        )
       }
 
       // Calculate minimum output with slippage
-      const amountOutMin = parseFloat(estimatedOut) * (1 - slippage / 100);
-      
+      const amountOutMin = parseFloat(estimatedOut) * (1 - slippage / 100)
+
       // Get output token decimals
-      const toDecimals = getTokenDecimals(toTokenAddress);
-      
+      const toDecimals = getTokenDecimals(toTokenAddress)
+
       // Parse minimum output amount with correct decimals
-      const amountOutMinBigInt = parseUnits(amountOutMin.toString(), toDecimals);
-      
-      const deadlineTimestamp = Math.floor(Date.now() / 1000) + deadline;
+      const amountOutMinBigInt = parseUnits(amountOutMin.toString(), toDecimals)
+
+      const deadlineTimestamp = Math.floor(Date.now() / 1000) + deadline
 
       if (fromToken === 'SEP') {
-        console.log('SEP to ERC20');
+        console.log('SEP to ERC20')
 
         const depositWETHData = encodeFunctionData({
           abi: wrappedSepolia,
           functionName: 'deposit',
-          args: []
-        });
+          args: [],
+        })
 
         const approveData = encodeFunctionData({
           abi: erc20Abi,
           functionName: 'approve',
-          args: [UNISWAP_ROUTER_ADDRESS, inputAmount]
-        });
+          args: [UNISWAP_ROUTER_ADDRESS, inputAmount],
+        })
 
         const swapData = encodeFunctionData({
           abi: dexRouterAbi,
@@ -129,44 +141,34 @@ export function useSwap(aaAddress: Hex) {
             amountOutMinBigInt,
             [WRAPPED_SEPOLIA_ADDRESS, toToken],
             aaAddress,
-            BigInt(deadlineTimestamp)
-          ]
-        });
+            BigInt(deadlineTimestamp),
+          ],
+        })
 
-        const targets = [
-          WRAPPED_SEPOLIA_ADDRESS,
-          WRAPPED_SEPOLIA_ADDRESS,
-          UNISWAP_ROUTER_ADDRESS
-        ];
+        const targets = [WRAPPED_SEPOLIA_ADDRESS, WRAPPED_SEPOLIA_ADDRESS, UNISWAP_ROUTER_ADDRESS]
 
         const values = [
           inputAmount, // Send ETH with the deposit call
           BigInt(0),
-          BigInt(0)
-        ];
+          BigInt(0),
+        ]
 
-        const datas = [
-          depositWETHData,
-          approveData,
-          swapData
-        ];
+        const datas = [depositWETHData, approveData, swapData]
 
         const callData = encodeFunctionData({
           abi: SimpleAccountABI,
           functionName: 'executeBatch',
-          args: [targets, values, datas]
-        });
+          args: [targets, values, datas],
+        })
 
-        return await executeCallData(callData);
-      }
-      
-      else if (toToken === 'SEP') {
-        console.log('ERC20 to SEP');
+        return await executeCallData(callData)
+      } else if (toToken === 'SEP') {
+        console.log('ERC20 to SEP')
         const approveData = encodeFunctionData({
           abi: erc20Abi,
           functionName: 'approve',
-          args: [UNISWAP_ROUTER_ADDRESS, inputAmount]
-        });
+          args: [UNISWAP_ROUTER_ADDRESS, inputAmount],
+        })
 
         const swapData = encodeFunctionData({
           abi: dexRouterAbi,
@@ -176,42 +178,31 @@ export function useSwap(aaAddress: Hex) {
             amountOutMinBigInt,
             [fromToken, WRAPPED_SEPOLIA_ADDRESS],
             aaAddress,
-            BigInt(deadlineTimestamp)
-          ]
-        });
+            BigInt(deadlineTimestamp),
+          ],
+        })
 
-        const targets = [
-          fromToken,
-          UNISWAP_ROUTER_ADDRESS
-        ];
-        
-        const values = [
-          BigInt(0),
-          BigInt(0)
-        ];
-        
-        const datas = [
-          approveData,
-          swapData
-        ];
+        const targets = [fromToken, UNISWAP_ROUTER_ADDRESS]
+
+        const values = [BigInt(0), BigInt(0)]
+
+        const datas = [approveData, swapData]
 
         const callData = encodeFunctionData({
           abi: SimpleAccountABI,
           functionName: 'executeBatch',
-          args: [targets, values, datas]
-        });
+          args: [targets, values, datas],
+        })
 
-        return await executeCallData(callData);
-      }
-      
-      else {
-        console.log('ERC20 to ERC20');
+        return await executeCallData(callData)
+      } else {
+        console.log('ERC20 to ERC20')
 
         const approveData = encodeFunctionData({
           abi: erc20Abi,
           functionName: 'approve',
-          args: [UNISWAP_ROUTER_ADDRESS, inputAmount]
-        });
+          args: [UNISWAP_ROUTER_ADDRESS, inputAmount],
+        })
 
         const swapData = encodeFunctionData({
           abi: dexRouterAbi,
@@ -221,118 +212,113 @@ export function useSwap(aaAddress: Hex) {
             amountOutMinBigInt,
             [fromToken, toToken],
             aaAddress,
-            BigInt(deadlineTimestamp)
-          ]
-        });
+            BigInt(deadlineTimestamp),
+          ],
+        })
 
-        const targets = [
-          fromToken,
-          UNISWAP_ROUTER_ADDRESS
-        ];
-        
-        const values = [
-          BigInt(0),
-          BigInt(0)
-        ];
-        
-        const datas = [
-          approveData,
-          swapData
-        ];
+        const targets = [fromToken, UNISWAP_ROUTER_ADDRESS]
+
+        const values = [BigInt(0), BigInt(0)]
+
+        const datas = [approveData, swapData]
 
         const callData = encodeFunctionData({
           abi: SimpleAccountABI,
           functionName: 'executeBatch',
-          args: [targets, values, datas]
-        });
+          args: [targets, values, datas],
+        })
 
-        return await executeCallData(callData);
+        return await executeCallData(callData)
       }
     } catch (error) {
-      console.error("Swap error:", error);
+      console.error('Swap error:', error)
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to swap tokens"
-      };
+        error: error instanceof Error ? error.message : 'Failed to swap tokens',
+      }
     }
-  };
+  }
 
-  const getSwapEstimate = async (fromToken: string, toToken: string, amount: string): Promise<string> => {
+  const getSwapEstimate = async (
+    fromToken: string,
+    toToken: string,
+    amount: string
+  ): Promise<string> => {
     try {
       if (!amount || parseFloat(amount) <= 0) {
-        return "0";
+        return '0'
       }
 
-      const pairSupported = await isSupportedPair(fromToken, toToken);
+      const pairSupported = await isSupportedPair(fromToken, toToken)
       if (!pairSupported) {
-        console.warn("This token pair doesn't have a liquidity pool");
-        return "0";
+        console.warn("This token pair doesn't have a liquidity pool")
+        return '0'
       }
 
       try {
         // Parse amount with correct decimals
-        const fromDecimals = await getTokenDecimals(fromToken);
-        const inputAmount = parseUnits(amount, fromDecimals);
-        
-        const amountsOut = await publicClient.readContract({
+        const fromDecimals = await getTokenDecimals(fromToken)
+        const inputAmount = parseUnits(amount, fromDecimals)
+
+        const amountsOut = (await publicClient.readContract({
           address: UNISWAP_ROUTER_ADDRESS as `0x${string}`,
           abi: dexRouterAbi,
           functionName: 'getAmountsOut',
-          args: [inputAmount, [fromToken, toToken]]
-        }) as bigint[];
-        
+          args: [inputAmount, [fromToken, toToken]],
+        })) as bigint[]
+
         if (amountsOut && amountsOut.length > 1) {
           // Format with correct decimals
-          const toDecimals = getTokenDecimals(toToken);
-          return formatUnits(amountsOut[1], toDecimals);
+          const toDecimals = getTokenDecimals(toToken)
+          return formatUnits(amountsOut[1], toDecimals)
         }
-        return "0";
+        return '0'
       } catch (error) {
-        console.error("Failed to get amounts out:", error);
-        
+        console.error('Failed to get amounts out:', error)
+
         // フォールバック: シンプルなダミーレートを使用
         // 実際の実装では削除
-        const estimatedAmount = parseFloat(amount) * 1.5;
-        return estimatedAmount.toString();
+        const estimatedAmount = parseFloat(amount) * 1.5
+        return estimatedAmount.toString()
       }
     } catch (error) {
-      console.error("Failed to get swap estimate:", error);
-      return "0";
+      console.error('Failed to get swap estimate:', error)
+      return '0'
     }
-  };
+  }
 
   const getTokenSymbol = async (tokenAddress: string): Promise<string> => {
     try {
-      const symbol = await publicClient.readContract({
+      const symbol = (await publicClient.readContract({
         address: tokenAddress as `0x${string}`,
         abi: erc20Abi,
-        functionName: 'symbol'
-      }) as string;
-      
-      return symbol;
+        functionName: 'symbol',
+      })) as string
+
+      return symbol
     } catch (error) {
-      console.error(`Failed to get token symbol for ${tokenAddress}:`, error);
-      return "UNKNOWN";
+      console.error(`Failed to get token symbol for ${tokenAddress}:`, error)
+      return 'UNKNOWN'
     }
-  };
+  }
 
   const getTokenBalance = async (tokenAddress: string): Promise<string> => {
     try {
-      const balance = await publicClient.readContract({
+      const balance = (await publicClient.readContract({
         address: tokenAddress as `0x${string}`,
         abi: erc20Abi,
         functionName: 'balanceOf',
-        args: [aaAddress]
-      }) as bigint;
-      
+        args: [aaAddress],
+      })) as bigint
+
       // Format with correct decimals
-      const decimals = getTokenDecimals(tokenAddress);
-      return formatUnits(balance, decimals);
+      const decimals = getTokenDecimals(tokenAddress)
+      return formatUnits(balance, decimals)
     } catch (error) {
-      console.error(`Failed to get token balance for ${tokenAddress}:`, error);
-      return "0";
+      console.error(`Failed to get token balance for ${tokenAddress}:`, error)
+      return '0'
     }
-  };
+  }
 
   return {
     swap,
@@ -340,6 +326,6 @@ export function useSwap(aaAddress: Hex) {
     isSupportedPair,
     checkPairExists,
     getTokenBalance,
-    getTokenSymbol
-  };
+    getTokenSymbol,
+  }
 }

@@ -16,24 +16,24 @@ export function useExecuteUserOperation() {
     const entryPoint = getContract({
       address: ENTRY_POINT_ADDRESS,
       abi: entryPointAbi,
-      client: publicClient
+      client: publicClient,
     })
-    
+
     const signedUserOps = await Promise.all(
-      userOperations.map(async (userOp) => {
+      userOperations.map(async userOp => {
         const userOpHashForSign = await entryPoint.read.getUserOpHash([userOp])
         const signature = await walletClient.signMessage({
-          message: { raw: userOpHashForSign as `0x${string}` }
+          message: { raw: userOpHashForSign as `0x${string}` },
         })
         return { ...userOp, signature }
       })
     )
 
     const userOpHashes = await Promise.all(
-      signedUserOps.map(async (userOp) => {
+      signedUserOps.map(async userOp => {
         return bundlerClient.request({
           method: 'eth_sendUserOperation',
-          params: [userOp, ENTRY_POINT_ADDRESS]
+          params: [userOp, ENTRY_POINT_ADDRESS],
         })
       })
     )

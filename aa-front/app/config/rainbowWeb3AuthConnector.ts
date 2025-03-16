@@ -85,7 +85,7 @@ export const rainbowWeb3AuthConnector = ({
 
       web3AuthInstance.configureAdapter(web3AuthAdapterInstance)
 
-      return createWagmiConnector((config) => ({
+      return createWagmiConnector(config => ({
         ...Web3AuthConnector({
           web3AuthInstance,
         })(config),

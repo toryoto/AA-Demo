@@ -18,22 +18,27 @@ const { wallets } = getDefaultWallets({
 
 const web3AuthWallet = rainbowWeb3AuthConnector(web3AuthConfig)
 
-const connectors = connectorsForWallets([
-  ...wallets,
+const connectors = connectorsForWallets(
+  [
+    ...wallets,
+    {
+      groupName: 'Social Auth',
+      wallets: [web3AuthWallet],
+    },
+  ],
   {
-    groupName: 'Social Auth',
-    wallets: [web3AuthWallet]
+    appName: 'ERC-4337 Demo',
+    projectId,
+    appIcon: 'https://web3auth.io/images/BrandLogo.png',
   }
-], {
-  appName: 'ERC-4337 Demo',
-  projectId,
-  appIcon: 'https://web3auth.io/images/BrandLogo.png'
-})
+)
 
 const config = createConfig({
   chains: [sepolia],
   transports: {
-    [sepolia.id]: http(`https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`),
+    [sepolia.id]: http(
+      `https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`
+    ),
   },
   connectors,
 })
@@ -46,9 +51,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <WagmiProvider config={config}>
         <RainbowKitProvider modalSize="compact">
           <UserOpConfirmationProvider>
-            <AAProvider>
-              {children}
-            </AAProvider>
+            <AAProvider>{children}</AAProvider>
           </UserOpConfirmationProvider>
         </RainbowKitProvider>
       </WagmiProvider>
