@@ -1,9 +1,9 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react'
-import { UserOpConfirmationModal } from '../components/UserOpConfirmationModal'
+import { UserOpConfirmationModal, UserOpSelection } from '../components/UserOpConfirmationModal'
 import { Hex } from 'viem'
 
 interface UserOpConfirmationContextType {
-  confirmUserOp: (callData: Hex, onConfirm: () => Promise<void>) => void
+  confirmUserOp: (callData: Hex, onConfirm: (selection: UserOpSelection) => Promise<void>) => void
 }
 
 const UserOpConfirmationContext = createContext<UserOpConfirmationContextType | undefined>(
@@ -14,20 +14,25 @@ export function UserOpConfirmationProvider({ children }: { children: ReactNode }
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [callData, setCallData] = useState<Hex | null>(null)
-  const [confirmationAction, setConfirmationAction] = useState<(() => Promise<void>) | null>(null)
+  const [confirmationAction, setConfirmationAction] = useState<
+    ((selection: UserOpSelection) => Promise<void>) | null
+  >(null)
 
-  const confirmUserOp = (callData: Hex, onConfirm: () => Promise<void>) => {
+  const confirmUserOp = (
+    callData: Hex, 
+    onConfirm: (selection: UserOpSelection) => Promise<void>
+  ) => {
     setCallData(callData)
     setConfirmationAction(() => onConfirm)
     setIsModalOpen(true)
   }
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (selection: UserOpSelection) => {
     if (!confirmationAction) return
 
     setIsProcessing(true)
     try {
-      await confirmationAction()
+      await confirmationAction(selection)
     } catch (error) {
       console.error('Error executing user operation:', error)
     } finally {

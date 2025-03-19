@@ -18,6 +18,7 @@ interface ExecuteOptions {
   multiTokenPaymaster? : boolean
   customPaymasterAndData?: Hex
   skipConfirmation?: boolean
+  tokenAddress?: string 
 }
 
 interface ExecuteResult {
@@ -82,112 +83,6 @@ export function useUserOperationExecutor(aaAddress: Hex) {
     []
   )
 
-  /**
-   * 実際のUserOp実行処理を行う内部関数
-   */
-  const performExecution = useCallback(
-    async (callData: Hex, options: ExecuteOptions = {}): Promise<ExecuteResult> => {
-      const {
-        initCode = '0x',
-        waitForReceipt = true,
-        timeout = 60000,
-        usePaymaster = false,
-        multiTokenPaymaster = true,
-        customPaymasterAndData,
-      } = options
-
-      if (!aaAddress || aaAddress === '0x') {
-        return { success: false, error: 'Smart account address not available' }
-      }
-
-      setIsProcessing(true)
-
-      try {
-        const userOp = await createUserOperation({
-          aaAddress,
-          callData,
-          initCode,
-        })
-
-        if (customPaymasterAndData) {
-          userOp.paymasterAndData = customPaymasterAndData
-        } else if (usePaymaster) {
-          const paymasterAndData = await getPaymasterAndData(userOp)
-          userOp.paymasterAndData = paymasterAndData
-        } else if (multiTokenPaymaster) {
-          if (!selectedToken) {
-            return { success: false, error: 'No token selected for gas payment' };
-          }
-
-          const tokenAddress = selectedToken.address;
-          const hasAllowance = await checkTokenAllowance(tokenAddress);
-
-          if (!hasAllowance) {
-            const approveResult = await approveTokenForPaymaster(
-              tokenAddress,
-            ); 
-            if (!approveResult.success) {
-              return ({ 
-                success: false, 
-                error: `Failed to approve token: ${approveResult.error}` 
-              });
-            }
-            console.log(approveResult)
-          }
-
-          const paymasterAndData = await getMultiTokenPaymasterAndData(userOp, tokenAddress)
-          userOp.paymasterAndData = paymasterAndData
-        }
-
-        const userOpHash = await execute(userOp)
-
-        if (!waitForReceipt) {
-          return {
-            success: true,
-            userOpHash,
-          }
-        }
-
-        const receipt = await bundlerClient.waitForUserOperationReceipt({
-          hash: userOpHash,
-          timeout,
-        })
-
-        return {
-          success: receipt.success,
-          userOpHash,
-          txHash: receipt.receipt.transactionHash,
-          receipt,
-        }
-      } catch (error) {
-        console.error('UserOperation execution failed:', error)
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error occurred',
-        }
-      } finally {
-        setIsProcessing(false)
-      }
-    },
-    [aaAddress, createUserOperation, getPaymasterAndData, execute]
-  )
-
-  const executeCallData = useCallback(
-    async (callData: Hex, options: ExecuteOptions = {}): Promise<ExecuteResult> => {
-      return new Promise((resolve, reject) => {
-        confirmUserOp(callData, async () => {
-          try {
-            const result = await performExecution(callData, options)
-            resolve(result)
-          } catch (error) {
-            reject(error)
-          }
-        })
-      })
-    },
-    [performExecution, confirmUserOp]
-  )
-
   const approveTokenForPaymaster = useCallback(
     async (tokenAddress: Hex): Promise<ExecuteResult> => {
       try {
@@ -234,7 +129,129 @@ export function useUserOperationExecutor(aaAddress: Hex) {
         };
       }
     },
-    [aaAddress, createUserOperation, execute]
+    [aaAddress, createUserOperation, execute, getPaymasterAndData]
+  );
+
+  /**
+   * 実際のUserOp実行処理を行う内部関数
+   */
+  const performExecution = useCallback(
+    async (callData: Hex, options: ExecuteOptions = {}): Promise<ExecuteResult> => {
+      const {
+        initCode = '0x',
+        waitForReceipt = true,
+        timeout = 60000,
+        usePaymaster = false,
+        multiTokenPaymaster = false,
+        customPaymasterAndData,
+        tokenAddress,
+      } = options;
+  
+      if (!aaAddress || aaAddress === '0x') {
+        return { success: false, error: 'Smart account address not available' }
+      }
+  
+      setIsProcessing(true);
+  
+      try {
+        const userOp = await createUserOperation({
+          aaAddress,
+          callData,
+          initCode,
+        });
+  
+        if (customPaymasterAndData) {
+          userOp.paymasterAndData = customPaymasterAndData;
+        } else if (usePaymaster) {
+          const paymasterAndData = await getPaymasterAndData(userOp);
+          userOp.paymasterAndData = paymasterAndData;
+        } else if (multiTokenPaymaster) {
+          // トークンで支払う場合
+          // tokenAddressが指定されている場合はそれを使用、そうでなければselectedToken
+          const tokenToUse = tokenAddress || (selectedToken ? selectedToken.address : null);
+          
+          if (!tokenToUse) {
+            return { success: false, error: 'No token selected for gas payment' };
+          }
+  
+          // トークンの許可を確認
+          const hasAllowance = await checkTokenAllowance(tokenToUse as Hex);
+  
+          if (!hasAllowance) {
+            // approveがない場合は承認トランザクションを実行
+            const approveResult = await approveTokenForPaymaster(tokenToUse as Hex);
+            if (!approveResult.success) {
+              return ({
+                success: false,
+                error: `Failed to approve token: ${approveResult.error}`
+              });
+            }
+            console.log('Token approval successful:', approveResult);
+          }
+  
+          const paymasterAndData = await getMultiTokenPaymasterAndData(userOp, tokenToUse as Hex);
+          userOp.paymasterAndData = paymasterAndData;
+        }
+        // ネイティブ通貨で支払う場合は paymasterAndData は '0x' のまま
+  
+        const userOpHash = await execute(userOp);
+  
+        if (!waitForReceipt) {
+          return {
+            success: true,
+            userOpHash,
+          };
+        }
+  
+        const receipt = await bundlerClient.waitForUserOperationReceipt({
+          hash: userOpHash,
+          timeout,
+        });
+  
+        return {
+          success: receipt.success,
+          userOpHash,
+          txHash: receipt.receipt.transactionHash,
+          receipt,
+        };
+      } catch (error) {
+        console.error('UserOperation execution failed:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error occurred',
+        };
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [aaAddress, createUserOperation, getPaymasterAndData, execute, getMultiTokenPaymasterAndData, checkTokenAllowance, approveTokenForPaymaster, selectedToken]
+  );
+
+  const executeCallData = useCallback(
+    async (callData: Hex, options: ExecuteOptions = {}): Promise<ExecuteResult> => {
+      return new Promise<ExecuteResult>((resolve, reject) => {
+        confirmUserOp(callData, async (userSelection) => {
+          try {
+            const updatedOptions: ExecuteOptions = {
+              ...options,
+              usePaymaster: userSelection.paymentOption === 'paymaster',
+              multiTokenPaymaster: userSelection.paymentOption === 'token',
+            };
+            
+            if (userSelection.paymentOption === 'token' && userSelection.tokenAddress) {
+              updatedOptions.tokenAddress = userSelection.tokenAddress;
+            }
+            
+            const result = await performExecution(callData, updatedOptions);
+            resolve(result);
+          } catch (error) {
+            console.error('実行中にエラーが発生しました:', error);
+            reject(error);
+          }
+        });
+      });
+    },
+    [performExecution, confirmUserOp]
   );
 
   return {

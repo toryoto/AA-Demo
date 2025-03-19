@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog'
 import { Button } from './ui/button'
 import { Loader2 } from 'lucide-react'
@@ -7,11 +7,22 @@ import { SimpleAccountABI } from '../abi/simpleAccount'
 import { erc20Abi } from '../abi/erc20'
 import { dexRouterAbi } from '../abi/dexRouter'
 import { wrappedSepolia } from '../abi/wrappedSepolia'
+import { RadioGroup, RadioGroupItem } from '@radix-ui/react-radio-group'
+import { Label } from './ui/label'
+import { TOKEN_OPTIONS } from '../constants/tokenList'
+import { DAI_ADDRESS } from '../constants/addresses'
+import Image from 'next/image'
+
+// ユーザー選択の型定義
+export type UserOpSelection = {
+  paymentOption: 'native' | 'token' | 'paymaster';
+  tokenAddress?: string;
+}
 
 interface UserOpConfirmationModalProps {
   isOpen: boolean
   onClose: () => void
-  onConfirm: () => void
+  onConfirm: (selection: UserOpSelection) => void
   isProcessing: boolean
   callData: Hex | null
 }
@@ -193,12 +204,21 @@ export const UserOpConfirmationModal: React.FC<UserOpConfirmationModalProps> = (
   isProcessing,
   callData,
 }) => {
-  // useMemoを使用してcallDataが変わった時のみdecodeDataを再実行する
+  const [selection, setSelection] = useState<UserOpSelection>({
+    paymentOption: 'native',
+    tokenAddress: DAI_ADDRESS,
+  })
+
   const decodedData = useMemo(() => {
     if (!callData) return null
     return decodeCallData(callData)
   }, [callData])
-  console.log('calldata', callData)
+  
+  const daiToken = TOKEN_OPTIONS.find(token => token.address === DAI_ADDRESS)
+
+  const handleConfirm = () => {
+    onConfirm(selection)
+  }
 
   if (!callData || !decodedData) return null
 
@@ -285,6 +305,50 @@ export const UserOpConfirmationModal: React.FC<UserOpConfirmationModalProps> = (
                 </div>
               </div>
             )}
+
+            <div className="mt-4 border-t pt-3">
+              <h4 className="text-sm font-medium mb-2">Payment Method</h4>
+              <RadioGroup 
+                value={selection.paymentOption} 
+                onValueChange={(value) => setSelection({
+                  ...selection,
+                  paymentOption: value as 'native' | 'token' | 'paymaster'
+                })}
+                className="space-y-2"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="native" id="native" />
+                  <Label htmlFor="native" className="cursor-pointer">
+                    Sepolia ETH
+                  </Label>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="token" id="token" />
+                  <Label htmlFor="token" className="cursor-pointer flex items-center">
+                    <div className="flex items-center">
+                      {daiToken && (
+                        <Image
+                          src={daiToken.logo} 
+                          alt={daiToken.symbol} 
+                          className="w-4 h-4 mr-1" 
+                          width={45}
+                          height={45}
+                        />
+                      )}
+                      DAI
+                    </div>
+                  </Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="paymaster" id="paymaster" />
+                  <Label htmlFor="paymaster" className="cursor-pointer">
+                    Paymaster
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
           </div>
         </div>
 
@@ -298,7 +362,12 @@ export const UserOpConfirmationModal: React.FC<UserOpConfirmationModalProps> = (
           >
             Cancel
           </Button>
-          <Button type="button" className="flex-1" onClick={onConfirm} disabled={isProcessing}>
+          <Button 
+            type="button" 
+            className="flex-1" 
+            onClick={handleConfirm} 
+            disabled={isProcessing}
+          >
             {isProcessing ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
