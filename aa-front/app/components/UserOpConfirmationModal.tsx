@@ -7,7 +7,7 @@ import { SimpleAccountABI } from '../abi/simpleAccount'
 import { erc20Abi } from '../abi/erc20'
 import { dexRouterAbi } from '../abi/dexRouter'
 import { wrappedSepolia } from '../abi/wrappedSepolia'
-import { RadioGroup, RadioGroupItem } from '@radix-ui/react-radio-group'
+import { RadioGroup, RadioGroupItem } from './ui/radio-group'
 import { Label } from './ui/label'
 import { TOKEN_OPTIONS } from '../constants/tokenList'
 import { DAI_ADDRESS } from '../constants/addresses'
@@ -15,8 +15,8 @@ import Image from 'next/image'
 
 // ユーザー選択の型定義
 export type UserOpSelection = {
-  paymentOption: 'native' | 'token' | 'paymaster';
-  tokenAddress?: string;
+  paymentOption: 'native' | 'token' | 'paymaster'
+  tokenAddress?: string
 }
 
 interface UserOpConfirmationModalProps {
@@ -213,7 +213,7 @@ export const UserOpConfirmationModal: React.FC<UserOpConfirmationModalProps> = (
     if (!callData) return null
     return decodeCallData(callData)
   }, [callData])
-  
+
   const daiToken = TOKEN_OPTIONS.find(token => token.address === DAI_ADDRESS)
 
   const handleConfirm = () => {
@@ -308,12 +308,14 @@ export const UserOpConfirmationModal: React.FC<UserOpConfirmationModalProps> = (
 
             <div className="mt-4 border-t pt-3">
               <h4 className="text-sm font-medium mb-2">Payment Method</h4>
-              <RadioGroup 
-                value={selection.paymentOption} 
-                onValueChange={(value) => setSelection({
-                  ...selection,
-                  paymentOption: value as 'native' | 'token' | 'paymaster'
-                })}
+              <RadioGroup
+                value={selection.paymentOption}
+                onValueChange={value =>
+                  setSelection({
+                    ...selection,
+                    paymentOption: value as 'native' | 'token' | 'paymaster',
+                  })
+                }
                 className="space-y-2"
               >
                 <div className="flex items-center space-x-2">
@@ -322,16 +324,16 @@ export const UserOpConfirmationModal: React.FC<UserOpConfirmationModalProps> = (
                     Sepolia ETH
                   </Label>
                 </div>
-                
+
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="token" id="token" />
                   <Label htmlFor="token" className="cursor-pointer flex items-center">
                     <div className="flex items-center">
                       {daiToken && (
                         <Image
-                          src={daiToken.logo} 
-                          alt={daiToken.symbol} 
-                          className="w-4 h-4 mr-1" 
+                          src={daiToken.logo}
+                          alt={daiToken.symbol}
+                          className="w-4 h-4 mr-1"
                           width={45}
                           height={45}
                         />
@@ -362,12 +364,7 @@ export const UserOpConfirmationModal: React.FC<UserOpConfirmationModalProps> = (
           >
             Cancel
           </Button>
-          <Button 
-            type="button" 
-            className="flex-1" 
-            onClick={handleConfirm} 
-            disabled={isProcessing}
-          >
+          <Button type="button" className="flex-1" onClick={handleConfirm} disabled={isProcessing}>
             {isProcessing ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

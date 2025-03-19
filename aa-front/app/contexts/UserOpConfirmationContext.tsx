@@ -19,7 +19,7 @@ export function UserOpConfirmationProvider({ children }: { children: ReactNode }
   >(null)
 
   const confirmUserOp = (
-    callData: Hex, 
+    callData: Hex,
     onConfirm: (selection: UserOpSelection) => Promise<void>
   ) => {
     setCallData(callData)
