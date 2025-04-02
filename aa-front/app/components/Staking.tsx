@@ -1,5 +1,7 @@
-import React, { useState } from 'react'
-import { Coins, ArrowRight, Loader2, BarChart3, Bell, CheckCircle2, AlertCircle } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { LIDO_CONTRACT_NAMES, LidoSDK } from '@lidofinance/lido-ethereum-sdk'
+import { sepolia } from 'viem/chains'
+import { Coins, ArrowRight, Loader2, BarChart3, Bell, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from './ui/card'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -7,7 +9,7 @@ import { Label } from './ui/label'
 import { Alert, AlertDescription } from './ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { Badge } from './ui/badge'
-// import { useAA } from '../hooks/useAA'
+import { useAA } from '../hooks/useAA'
 
 interface StakingProps {
   isDeployed: boolean
@@ -15,7 +17,7 @@ interface StakingProps {
 }
 
 export const Staking: React.FC<StakingProps> = ({ isDeployed, onStakeComplete }) => {
-  // const { aaAddress } = useAA()
+  const { aaAddress } = useAA()
   const [amount, setAmount] = useState<string>('')
   const [withdrawalAmount, setWithdrawalAmount] = useState<string>('')
   const [isStaking, setIsStaking] = useState(false)
@@ -25,10 +27,34 @@ export const Staking: React.FC<StakingProps> = ({ isDeployed, onStakeComplete })
     null
   )
 
-  // Placeholder values for Staking UI
+  // State for Lido staking data
   const stakedBalance = '0.0000'
-  const apr = '3.8'
   const rewards = '0.0000'
+  const [apr, setApr] = useState<string>('0.00')
+  const [isLoadingStats, setIsLoadingStats] = useState(false)
+  
+  // Initialize Lido SDK and fetch APR
+  useEffect(() => {
+    const fetchLidoStats = async () => {
+      setIsLoadingStats(true)
+      try {
+        const lidoSDK = new LidoSDK({
+          rpcUrls: [`https://eth-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`],
+          chainId: sepolia.id,
+        })
+        
+        const aprValue = await lidoSDK.statistics.apr.getSmaApr({ days: 7 });
+        console.log("apr:", aprValue)
+        setApr(aprValue.toString())
+      } catch (error) {
+        console.error('Error fetching Lido stats:', error)
+      } finally {
+        setIsLoadingStats(false)
+      }
+    }
+    
+    fetchLidoStats()
+  }, [])
 
   const handleStake = async () => {
     if (!amount || parseFloat(amount) <= 0) return
@@ -94,7 +120,14 @@ export const Staking: React.FC<StakingProps> = ({ isDeployed, onStakeComplete })
             <CardTitle className="text-lg font-bold">Lido Staking</CardTitle>
           </div>
           <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200">
-            {apr}% APR
+            {isLoadingStats ? (
+              <div className="flex items-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Loading APR...</span>
+              </div>
+            ) : (
+              <>{apr}% APR</>
+            )}
           </Badge>
         </div>
         <CardDescription className="text-sm text-slate-500 mt-1">
@@ -159,7 +192,14 @@ export const Staking: React.FC<StakingProps> = ({ isDeployed, onStakeComplete })
           
           <div className="p-4 bg-green-50 rounded-lg border border-green-100">
             <p className="text-xs text-green-500 mb-1">Current APR</p>
-            <p className="text-lg font-semibold">{apr}%</p>
+            {isLoadingStats ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-green-500" />
+                <p className="text-sm text-green-600">Fetching from Lido...</p>
+              </div>
+            ) : (
+              <p className="text-lg font-semibold">{apr}%</p>
+            )}
           </div>
           
           <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
@@ -327,12 +367,6 @@ export const Staking: React.FC<StakingProps> = ({ isDeployed, onStakeComplete })
           </div>
         )}
       </CardContent>
-
-      <CardFooter className="bg-slate-50 border-t border-slate-200 p-4">
-        <div className="text-xs text-slate-500 w-full text-center">
-          This is a demo implementation using Lido on Sepolia testnet
-        </div>
-      </CardFooter>
     </Card>
   )
 }
